@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { 
   Database, 
   Search, 
@@ -8,9 +8,14 @@ import {
   UserPlus, 
   Key, 
   Layers, 
-  Sparkles, 
-  ShieldCheck, 
-  FileText 
+  FileText,
+  X,
+  Sparkles,
+  ArrowUpRight,
+  ShieldCheck,
+  CheckCircle2,
+  Clock,
+  Zap
 } from 'lucide-react';
 import { 
   getStoredProofs, 
@@ -18,6 +23,7 @@ import {
   registerAgent, 
   generateKeypairBrowser 
 } from '../api';
+import PulsarGlassSegmented from './PulsarGlassSegmented';
 
 export default function LedgerExplorer() {
   const [activeSection, setActiveSection] = useState('proofs');
@@ -77,121 +83,168 @@ export default function LedgerExplorer() {
   });
 
   return (
-    <div className="space-y-8 animate-fadeIn">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-purple-950/80 border border-purple-500/30 text-xs font-mono text-purple-300 mb-2">
-            <Database className="w-3.5 h-3.5" />
-            <span>Immutable Registry</span>
+    <div className="space-y-8">
+      
+      {/* Top Header & KPI Bento Cards (Cal.com style) */}
+      <div className="space-y-6">
+        
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <span className="cal-pill bg-gray-100 text-gray-800 font-mono text-xs">
+                IMMUTABLE AUDIT TRAIL
+              </span>
+              <span className="text-xs font-mono text-gray-400">solana-devnet</span>
+            </div>
+            <h2 className="text-3xl font-extrabold tracking-tight text-gray-950 font-sans">
+              Ledger & Identity Registry
+            </h2>
+            <p className="text-sm text-gray-600">
+              Complete verifiable log of notarized documents anchored to Solana Devnet and authorized agent public keys.
+            </p>
           </div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Ledger & Agent Registry</h2>
-          <p className="text-slate-400 text-sm">
-            Auditable log of all cryptographic notarizations anchored to Solana Devnet and registered AI identities.
-          </p>
+
+          {/* Pulsar Glass Liquid Segmented Tabs */}
+          <div className="self-start">
+            <PulsarGlassSegmented
+              options={[
+                { value: 'proofs', label: `Notarized Proofs (${proofs.length})`, icon: <Layers className="w-3.5 h-3.5" /> },
+                { value: 'agents', label: `Agent Directory (${agents.length})`, icon: <UserPlus className="w-3.5 h-3.5" /> },
+              ]}
+              value={activeSection}
+              onChange={setActiveSection}
+              size="sm"
+              theme="light"
+            />
+          </div>
         </div>
 
-        <div className="flex items-center p-1 rounded-xl bg-cyber-900 border border-white/10 self-start">
-          <button
-            onClick={() => setActiveSection('proofs')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-mono font-medium transition-all cursor-pointer ${
-              activeSection === 'proofs'
-                ? 'bg-cyber-800 text-cyan-400 border border-cyan-500/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Proof Ledger ({proofs.length})</span>
-          </button>
+        {/* 4 KPI Bento Stat Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="cal-card p-5 space-y-1.5">
+            <div className="text-xs font-mono text-gray-500">Anchored Proofs</div>
+            <div className="text-2xl font-extrabold text-gray-950 font-sans">{proofs.length}</div>
+            <div className="text-[11px] text-emerald-600 font-medium flex items-center space-x-1">
+              <span>✓ 100% On-Chain</span>
+            </div>
+          </div>
 
-          <button
-            onClick={() => setActiveSection('agents')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-mono font-medium transition-all cursor-pointer ${
-              activeSection === 'agents'
-                ? 'bg-cyber-800 text-purple-400 border border-purple-500/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            <span>Agent Directory ({agents.length})</span>
-          </button>
+          <div className="cal-card p-5 space-y-1.5">
+            <div className="text-xs font-mono text-gray-500">Authorized Agents</div>
+            <div className="text-2xl font-extrabold text-gray-950 font-sans">{agents.length}</div>
+            <div className="text-[11px] text-blue-600 font-medium flex items-center space-x-1">
+              <span>Ed25519 Keypairs</span>
+            </div>
+          </div>
+
+          <div className="cal-card p-5 space-y-1.5">
+            <div className="text-xs font-mono text-gray-500">Solana Network</div>
+            <div className="text-2xl font-extrabold text-gray-950 font-sans">Devnet</div>
+            <div className="text-[11px] text-gray-500 font-medium flex items-center space-x-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              <span>Sub-second finality</span>
+            </div>
+          </div>
+
+          <div className="cal-card p-5 space-y-1.5">
+            <div className="text-xs font-mono text-gray-500">Consensus Rate</div>
+            <div className="text-2xl font-extrabold text-gray-950 font-sans">100.0%</div>
+            <div className="text-[11px] text-emerald-600 font-medium">
+              Mathematical certainty
+            </div>
+          </div>
         </div>
+
       </div>
 
+      {/* Proofs Section */}
       {activeSection === 'proofs' && (
         <div className="space-y-4">
+          
+          {/* Search Bar (Cal.com style) */}
           <div className="relative">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by Proof ID, SHA-256 Hash, Agent ID, or File Name..."
-              className="w-full glass-input rounded-xl pl-10 pr-4 py-2.5 text-sm font-mono placeholder:text-slate-600"
+              placeholder="Search proofs by ID, SHA-256 hash, agent identifier, or file..."
+              className="cal-input pl-10 pr-4 py-2.5 text-xs font-mono"
             />
           </div>
 
-          <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
+          {/* Clean High-Density Table (Cal.com style) */}
+          <div className="cal-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs font-mono">
-                <thead className="bg-cyber-900/90 text-slate-400 border-b border-white/10">
+                <thead className="bg-gray-50/80 text-gray-500 border-b border-gray-200 uppercase tracking-wider text-[10px]">
                   <tr>
-                    <th className="p-3.5">Proof ID</th>
-                    <th className="p-3.5">Artifact / Route</th>
-                    <th className="p-3.5">SHA-256 Digest</th>
-                    <th className="p-3.5">Timestamp</th>
-                    <th className="p-3.5">Solana Proof</th>
-                    <th className="p-3.5 text-right">Action</th>
+                    <th className="py-3 px-4 font-bold text-gray-700">Proof ID</th>
+                    <th className="py-3 px-4 font-bold text-gray-700">Artifact & Route</th>
+                    <th className="py-3 px-4 font-bold text-gray-700">SHA-256 Digest</th>
+                    <th className="py-3 px-4 font-bold text-gray-700">Timestamp (UTC)</th>
+                    <th className="py-3 px-4 font-bold text-gray-700">Solana Proof</th>
+                    <th className="py-3 px-4 font-bold text-gray-700 text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-gray-100">
                   {filteredProofs.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-slate-500">
-                        No notarization records found matching your search.
+                      <td colSpan={6} className="py-12 text-center text-gray-400 text-xs">
+                        No registered notarization records found.
                       </td>
                     </tr>
                   ) : (
                     filteredProofs.map((p) => (
-                      <tr key={p.proof_id} className="hover:bg-cyber-900/50 transition-colors">
-                        <td className="p-3.5">
-                          <span className="font-bold text-cyan-400">{p.proof_id}</span>
+                      <tr key={p.proof_id} className="hover:bg-gray-50/60 transition-colors">
+                        <td className="py-3.5 px-4 font-bold text-gray-900">
+                          {p.proof_id}
                         </td>
-                        <td className="p-3.5">
-                          <div className="text-slate-200 font-medium flex items-center space-x-1.5">
-                            <FileText className="w-3.5 h-3.5 text-slate-400" />
-                            <span>{p.file_name || 'artifact.dat'}</span>
+                        <td className="py-3.5 px-4">
+                          <div className="text-gray-900 font-semibold flex items-center space-x-1.5 font-sans">
+                            <FileText className="w-3.5 h-3.5 text-gray-400" />
+                            <span>{p.file_name || 'report.pdf'}</span>
                           </div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">
+                          <div className="text-[11px] text-gray-500 mt-0.5">
                             {p.sender} ➔ {p.receiver}
                           </div>
                         </td>
-                        <td className="p-3.5 max-w-[180px]">
-                          <div className="truncate text-slate-300 select-all" title={p.document_hash}>
-                            {p.document_hash}
+                        <td className="py-3.5 px-4 max-w-[200px]">
+                          <div className="flex items-center space-x-1.5">
+                            <span className="truncate text-gray-600 select-all font-mono text-[11px]" title={p.document_hash}>
+                              {p.document_hash.substring(0, 14)}...{p.document_hash.substring(58)}
+                            </span>
+                            <button
+                              onClick={() => copyToClipboard(p.document_hash, p.proof_id)}
+                              className="text-gray-400 hover:text-black cursor-pointer"
+                              title="Copy SHA-256"
+                            >
+                              {copiedKey === p.proof_id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                            </button>
                           </div>
                         </td>
-                        <td className="p-3.5 text-slate-400 whitespace-nowrap">
+                        <td className="py-3.5 px-4 text-gray-500 tabular-nums whitespace-nowrap text-[11px]">
                           {p.timestamp}
                         </td>
-                        <td className="p-3.5">
+                        <td className="py-3.5 px-4">
                           {p.explorer_url ? (
                             <a
                               href={p.explorer_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center space-x-1 text-purple-400 hover:text-purple-300"
+                              className="inline-flex items-center space-x-1 text-blue-600 hover:underline text-[11px] font-medium font-sans"
                             >
                               <span>Solana Tx</span>
-                              <ExternalLink className="w-3 h-3" />
+                              <ArrowUpRight className="w-3 h-3" />
                             </a>
                           ) : (
-                            <span className="text-slate-500">Local Proof</span>
+                            <span className="text-gray-400 text-[11px]">Local Record</span>
                           )}
                         </td>
-                        <td className="p-3.5 text-right">
+                        <td className="py-3.5 px-4 text-right">
                           <button
                             onClick={() => setSelectedProof(p)}
-                            className="px-2.5 py-1 rounded bg-cyber-800 hover:bg-cyber-700 text-slate-300 border border-white/10 text-[11px] cursor-pointer"
+                            className="cal-btn-secondary px-3 py-1 text-xs rounded-lg cursor-pointer"
                           >
                             Inspect
                           </button>
@@ -203,43 +256,47 @@ export default function LedgerExplorer() {
               </table>
             </div>
           </div>
+
         </div>
       )}
 
+      {/* Agents Section */}
       {activeSection === 'agents' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1 glass-panel rounded-2xl p-6 border border-white/10 space-y-4">
-            <div className="flex items-center space-x-2">
-              <Key className="w-4 h-4 text-purple-400" />
-              <h3 className="text-sm font-bold font-mono text-slate-200">Register AI Agent</h3>
+          
+          {/* Registration Form (Cal.com Bento card) */}
+          <div className="lg:col-span-1 cal-card p-6 space-y-4">
+            <div className="flex items-center space-x-2 pb-3 border-b border-gray-100">
+              <Key className="w-4 h-4 text-gray-700" />
+              <h3 className="text-base font-bold text-gray-900 font-sans">Register Agent Key</h3>
             </div>
-            <p className="text-xs text-slate-400">
-              Register an agent identity with its Base64 Ed25519 public key (<code>POST /agents/register</code>).
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Register an authorized agent ID and its 32-byte Ed25519 Base64 public key (<code>POST /agents/register</code>).
             </p>
 
-            <form onSubmit={handleRegisterAgent} className="space-y-3">
+            <form onSubmit={handleRegisterAgent} className="space-y-4 text-xs">
               <div>
-                <label className="block text-xs font-mono text-slate-400 mb-1">Agent ID</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Agent Identifier</label>
                 <input
                   type="text"
                   value={newAgentId}
                   onChange={(e) => setNewAgentId(e.target.value)}
                   placeholder="e.g. agent_c"
-                  className="w-full glass-input rounded-lg px-3 py-2 text-xs font-mono"
+                  className="cal-input font-mono text-xs"
                   required
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-mono text-slate-400">Public Key (Base64)</label>
+                  <label className="block text-xs font-bold text-gray-700">Public Key (Base64)</label>
                   <button
                     type="button"
                     onClick={handleGenerateKeypair}
-                    className="text-[10px] font-mono text-purple-400 hover:text-purple-300 flex items-center space-x-1 cursor-pointer"
+                    className="text-[11px] font-sans text-blue-600 hover:underline flex items-center space-x-1 cursor-pointer"
                   >
                     <Sparkles className="w-3 h-3" />
-                    <span>Generate Keypair</span>
+                    <span>Generate Ed25519 Pair</span>
                   </button>
                 </div>
                 <textarea
@@ -247,66 +304,75 @@ export default function LedgerExplorer() {
                   value={newPublicKey}
                   onChange={(e) => setNewPublicKey(e.target.value)}
                   placeholder="Base64 32-byte Ed25519 Public Key"
-                  className="w-full glass-input rounded-lg px-3 py-2 text-xs font-mono resize-none"
+                  className="cal-input font-mono text-xs resize-none"
                   required
                 />
               </div>
 
               {newPrivateKey && (
-                <div className="p-3 rounded-lg bg-cyber-900 border border-purple-500/30 text-xs font-mono space-y-1">
-                  <span className="text-purple-300 font-bold block text-[10px]">Private Key Seed (Keep Secure):</span>
-                  <div className="text-[11px] text-slate-300 break-all select-all">
+                <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-200 text-xs font-mono space-y-1">
+                  <span className="text-gray-500 font-bold block text-[10px]">Private Key Seed (Secret):</span>
+                  <div className="text-[11px] text-gray-800 break-all select-all font-mono">
                     {newPrivateKey}
                   </div>
                 </div>
               )}
 
               {registerSuccess && (
-                <div className="p-2 rounded bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs font-mono text-center">
-                  Agent registered successfully!
+                <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium text-center">
+                  Agent identity registered successfully!
                 </div>
               )}
 
               <button
                 type="submit"
                 disabled={isRegistering || !newAgentId || !newPublicKey}
-                className="w-full py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-medium text-xs font-mono shadow-glow-purple disabled:opacity-50 transition-all cursor-pointer"
+                className="w-full cal-btn-primary py-2.5 text-xs rounded-xl font-bold flex items-center justify-center space-x-1.5 disabled:opacity-40"
               >
-                {isRegistering ? 'Registering...' : 'Register Agent Identity'}
+                <span>{isRegistering ? 'Registering...' : 'Register Identity'}</span>
               </button>
             </form>
           </div>
 
+          {/* Registered Agent Grid (Cal.com style cards) */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="glass-panel rounded-2xl p-6 border border-white/10 space-y-4">
-              <h3 className="text-sm font-bold font-mono text-slate-200">Registered AI Agents</h3>
+            <div className="cal-card p-6 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                <h3 className="text-base font-bold text-gray-900 font-sans">Authorized Agent Identities</h3>
+                <span className="text-xs font-mono text-gray-500">{agents.length} active keypairs</span>
+              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {agents.map((agent) => (
                   <div
                     key={agent.agent_id}
-                    className="p-4 rounded-xl bg-cyber-900/80 border border-white/5 space-y-2 hover:border-purple-500/30 transition-all"
+                    className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-3"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold font-mono text-cyan-400">{agent.agent_id}</span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyber-950 text-slate-400 border border-white/5">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[10px]">
+                          {agent.agent_id.substring(0, 2).toUpperCase()}
+                        </div>
+                        <span className="text-xs font-bold font-mono text-gray-900">{agent.agent_id}</span>
+                      </div>
+                      <span className="cal-pill text-[10px] py-0.5 px-2 bg-white text-gray-600">
                         Ed25519
                       </span>
                     </div>
 
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-gray-600">
                       {agent.role || 'Autonomous Network Agent'}
                     </div>
 
                     <div className="space-y-1 pt-1">
-                      <span className="text-[10px] text-slate-500 font-mono block">Public Key (Base64):</span>
-                      <div className="flex items-center justify-between p-2 rounded bg-cyber-950 text-[11px] font-mono text-slate-300 break-all border border-white/5">
+                      <span className="text-[10px] text-gray-400 font-mono block">Public Key:</span>
+                      <div className="flex items-center justify-between p-2 rounded-lg bg-white text-[11px] font-mono text-gray-700 border border-gray-200">
                         <span className="truncate pr-2">{agent.public_key}</span>
                         <button
                           onClick={() => copyToClipboard(agent.public_key, agent.agent_id)}
-                          className="text-slate-400 hover:text-cyan-300 flex-shrink-0 cursor-pointer"
+                          className="text-gray-400 hover:text-black cursor-pointer"
                         >
-                          {copiedKey === agent.agent_id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          {copiedKey === agent.agent_id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                         </button>
                       </div>
                     </div>
@@ -315,44 +381,45 @@ export default function LedgerExplorer() {
               </div>
             </div>
           </div>
+
         </div>
       )}
 
+      {/* Proof Inspection Modal (Cal.com popup) */}
       {selectedProof && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="glass-panel rounded-2xl max-w-2xl w-full p-6 border border-white/10 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center space-x-2">
-                <ShieldCheck className="w-5 h-5 text-cyan-400" />
-                <h3 className="text-base font-bold font-mono text-white">Proof Audit: {selectedProof.proof_id}</h3>
-              </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <div className="cal-card max-w-xl w-full p-6 space-y-4 shadow-2xl bg-white border border-gray-300">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <span className="text-sm font-bold text-gray-900 font-sans">
+                Proof Record: {selectedProof.proof_id}
+              </span>
               <button
                 onClick={() => setSelectedProof(null)}
-                className="text-slate-400 hover:text-white text-sm font-mono px-2 py-1 cursor-pointer"
+                className="text-gray-400 hover:text-gray-900 cursor-pointer p-1"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <pre className="p-4 rounded-xl bg-cyber-950 text-xs font-mono text-slate-300 overflow-x-auto border border-white/5 leading-relaxed">
+            <pre className="p-4 rounded-xl bg-gray-50 text-xs font-mono text-gray-800 overflow-x-auto border border-gray-200 leading-relaxed">
               {JSON.stringify(selectedProof, null, 2)}
             </pre>
 
-            <div className="flex justify-end space-x-3 pt-2">
+            <div className="flex justify-end space-x-2 pt-2">
               {selectedProof.explorer_url && (
                 <a
                   href={selectedProof.explorer_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-purple-950 hover:bg-purple-900 border border-purple-500/40 text-purple-300 text-xs font-mono"
+                  className="cal-btn-primary py-2 px-3.5 text-xs rounded-lg flex items-center space-x-1.5"
                 >
-                  <span>Open in Solana Explorer</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Solana Explorer</span>
+                  <ArrowUpRight className="w-3 h-3" />
                 </a>
               )}
               <button
                 onClick={() => setSelectedProof(null)}
-                className="px-4 py-2 rounded-lg bg-cyber-800 hover:bg-cyber-700 text-slate-300 text-xs font-mono cursor-pointer"
+                className="cal-btn-secondary px-3.5 py-2 text-xs rounded-lg cursor-pointer"
               >
                 Close
               </button>
@@ -360,6 +427,7 @@ export default function LedgerExplorer() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

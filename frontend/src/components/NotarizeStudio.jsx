@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { 
   UploadCloud, 
   ShieldCheck, 
@@ -7,8 +7,12 @@ import {
   ExternalLink, 
   Cpu, 
   Send, 
-  Sparkles, 
-  Layers 
+  Key, 
+  FileText,
+  Clock,
+  Sparkles,
+  ArrowRight,
+  ArrowUpRight
 } from 'lucide-react';
 import { 
   calculateSha256Browser, 
@@ -41,6 +45,12 @@ export default function NotarizeStudio({ onProofCreated }) {
     } catch (err) {
       console.error('Hash calculation failed', err);
     }
+  };
+
+  const handleLoadSample = () => {
+    const sampleContent = `ChainNotary Provenance Report v1.0\nTimestamp: ${new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')}\nSender: ${sender}\nReceiver: ${receiver}\nStatus: APPROVED FOR NOTARIZATION`;
+    const sampleFile = new File([sampleContent], "notary_report.pdf", { type: "application/pdf" });
+    handleFileChange(sampleFile);
   };
 
   const handleAutoSign = () => {
@@ -83,23 +93,42 @@ export default function NotarizeStudio({ onProofCreated }) {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-fadeIn">
-      <div>
-        <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-cyan-950/80 border border-cyan-500/30 text-xs font-mono text-cyan-300 mb-2">
-          <Layers className="w-3.5 h-3.5" />
-          <span>Sender Module</span>
+    <div className="max-w-4xl mx-auto space-y-8">
+      
+      {/* Header section (Cal.com style) */}
+      <div className="space-y-3">
+        <div className="flex items-center space-x-2">
+          <span className="cal-pill bg-gray-100 text-gray-800 font-mono text-xs">
+            SENDER INTERFACE
+          </span>
+          <span className="text-xs font-mono text-gray-400">POST /notarize</span>
         </div>
-        <h2 className="text-2xl font-bold text-white tracking-tight">Notarize Studio</h2>
-        <p className="text-slate-400 text-sm">
-          Compute instant browser-side SHA-256 fingerprint, digitally sign with Ed25519, and anchor immutable proof to Solana.
+        <h2 className="text-3xl font-extrabold tracking-tight text-gray-950 font-sans">
+          Notarize Studio
+        </h2>
+        <p className="text-sm sm:text-base text-gray-600 max-w-2xl leading-relaxed">
+          Compute client-side SHA-256 fingerprint, attach Ed25519 digital signature, and permanently anchor immutable proof to the Solana Devnet blockchain.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="glass-panel rounded-2xl p-6 border border-white/10 space-y-4">
-          <label className="block text-xs font-mono font-bold text-slate-300 uppercase tracking-wider">
-            1. Select Artifact / Digital Output
-          </label>
+        
+        {/* Bento Card 1: Artifact Ingestion */}
+        <div className="cal-card p-6 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+            <div>
+              <span className="text-xs font-mono font-bold text-gray-400 uppercase">Step 01</span>
+              <h3 className="text-base font-bold text-gray-950 font-sans">Artifact Input</h3>
+            </div>
+            <button
+              type="button"
+              onClick={handleLoadSample}
+              className="text-xs font-medium text-gray-600 hover:text-black flex items-center space-x-1 cursor-pointer bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200 transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              <span>Load Sample Artifact</span>
+            </button>
+          </div>
 
           <div
             onDragOver={(e) => e.preventDefault()}
@@ -107,7 +136,7 @@ export default function NotarizeStudio({ onProofCreated }) {
               e.preventDefault();
               if (e.dataTransfer.files?.[0]) handleFileChange(e.dataTransfer.files[0]);
             }}
-            className="border-2 border-dashed border-slate-700 hover:border-cyan-500/50 rounded-xl p-8 text-center cursor-pointer transition-colors bg-cyber-900/40"
+            className="border-2 border-dashed border-gray-200 hover:border-gray-400 rounded-2xl p-8 text-center cursor-pointer transition-colors bg-gray-50/50 hover:bg-white"
             onClick={() => document.getElementById('file-upload-input').click()}
           >
             <input
@@ -116,53 +145,57 @@ export default function NotarizeStudio({ onProofCreated }) {
               className="hidden"
               onChange={(e) => handleFileChange(e.target.files?.[0])}
             />
-            <UploadCloud className="w-10 h-10 text-cyan-400 mx-auto mb-3" />
-            <p className="text-sm font-medium text-slate-200">
-              {file ? file.name : 'Click to select or drag and drop artifact'}
-            </p>
-            <p className="text-xs text-slate-500 mt-1 font-mono">
-              {file ? `${(file.size / 1024).toFixed(2)} KB` : 'PDF, JSON, CSV, Images, Logs or Binaries'}
-            </p>
+            <div className="w-12 h-12 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center mx-auto mb-3 text-gray-700">
+              <UploadCloud className="w-6 h-6" />
+            </div>
+            <div className="text-sm font-bold text-gray-900">
+              {file ? file.name : 'Select or drag & drop an artifact to notarize'}
+            </div>
+            <div className="text-xs text-gray-500 mt-1 font-mono">
+              {file ? `${(file.size / 1024).toFixed(2)} KB • Ready for hashing` : 'Supports PDF, JSON, EVM Bytecode, Model Weights, Execution Logs'}
+            </div>
           </div>
 
           {docHash && (
-            <div className="p-3.5 rounded-xl bg-cyber-950/80 border border-cyan-500/30 space-y-1">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-                  <span className="text-[11px] font-mono text-cyan-300">Client-Side Web Crypto SHA-256 Digest:</span>
+            <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-1.5 text-xs font-mono">
+              <div className="flex items-center justify-between text-gray-500 text-[11px]">
+                <div className="flex items-center space-x-1.5">
+                  <Cpu className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="font-semibold text-gray-700">Client-Side Calculated SHA-256 Digest:</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => copyToClipboard(docHash, 'hash')}
-                  className="text-[10px] font-mono text-slate-400 hover:text-cyan-300 flex items-center space-x-1 cursor-pointer"
+                  className="text-gray-500 hover:text-black flex items-center space-x-1 cursor-pointer font-sans"
                 >
-                  {copiedField === 'hash' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedField === 'hash' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
                   <span>{copiedField === 'hash' ? 'Copied' : 'Copy'}</span>
                 </button>
               </div>
-              <div className="text-xs font-mono text-slate-200 break-all select-all font-semibold">
+              <div className="cal-hash-block font-bold text-gray-900 bg-white">
                 {docHash}
               </div>
             </div>
           )}
         </div>
 
-        <div className="glass-panel rounded-2xl p-6 border border-white/10 space-y-4">
-          <label className="block text-xs font-mono font-bold text-slate-300 uppercase tracking-wider">
-            2. Provenance Metadata & Identities
-          </label>
+        {/* Bento Card 2: Transfer Metadata */}
+        <div className="cal-card p-6 space-y-4">
+          <div className="pb-3 border-b border-gray-100">
+            <span className="text-xs font-mono font-bold text-gray-400 uppercase">Step 02</span>
+            <h3 className="text-base font-bold text-gray-950 font-sans">Provenance Context</h3>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-mono text-slate-400 mb-1">Sender Agent ID</label>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">Sender Agent</label>
               <select
                 value={sender}
                 onChange={(e) => setSender(e.target.value)}
-                className="w-full glass-input rounded-lg px-3 py-2 text-sm font-mono"
+                className="cal-input font-mono text-xs cursor-pointer"
               >
                 {agents.map((a) => (
-                  <option key={a.agent_id} value={a.agent_id} className="bg-cyber-900 text-slate-200">
+                  <option key={a.agent_id} value={a.agent_id}>
                     {a.agent_id} ({a.role || 'Agent'})
                   </option>
                 ))}
@@ -170,14 +203,14 @@ export default function NotarizeStudio({ onProofCreated }) {
             </div>
 
             <div>
-              <label className="block text-xs font-mono text-slate-400 mb-1">Receiver Agent ID</label>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">Receiver Agent</label>
               <select
                 value={receiver}
                 onChange={(e) => setReceiver(e.target.value)}
-                className="w-full glass-input rounded-lg px-3 py-2 text-sm font-mono"
+                className="cal-input font-mono text-xs cursor-pointer"
               >
                 {agents.map((a) => (
-                  <option key={a.agent_id} value={a.agent_id} className="bg-cyber-900 text-slate-200">
+                  <option key={a.agent_id} value={a.agent_id}>
                     {a.agent_id} ({a.role || 'Agent'})
                   </option>
                 ))}
@@ -186,30 +219,42 @@ export default function NotarizeStudio({ onProofCreated }) {
           </div>
 
           <div>
-            <label className="block text-xs font-mono text-slate-400 mb-1">Timestamp (ISO 8601 UTC)</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-bold text-gray-700">Timestamp (ISO 8601 UTC)</label>
+              <button
+                type="button"
+                onClick={() => setTimestamp(new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'))}
+                className="text-[11px] text-blue-600 hover:underline flex items-center space-x-1 cursor-pointer"
+              >
+                <Clock className="w-3 h-3" />
+                <span>Now</span>
+              </button>
+            </div>
             <input
               type="text"
               value={timestamp}
               onChange={(e) => setTimestamp(e.target.value)}
-              className="w-full glass-input rounded-lg px-3 py-2 text-sm font-mono"
+              className="cal-input font-mono text-xs"
               placeholder="2026-10-03T18:30:00Z"
             />
           </div>
         </div>
 
-        <div className="glass-panel rounded-2xl p-6 border border-white/10 space-y-4">
-          <div className="flex items-center justify-between">
-            <label className="block text-xs font-mono font-bold text-slate-300 uppercase tracking-wider">
-              3. Ed25519 Digital Signature
-            </label>
+        {/* Bento Card 3: Cryptographic Signature */}
+        <div className="cal-card p-6 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+            <div>
+              <span className="text-xs font-mono font-bold text-gray-400 uppercase">Step 03</span>
+              <h3 className="text-base font-bold text-gray-950 font-sans">Ed25519 Detached Signature</h3>
+            </div>
             <button
               type="button"
               onClick={handleAutoSign}
               disabled={!docHash}
-              className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-purple-950/80 hover:bg-purple-900/80 text-purple-300 border border-purple-500/40 text-xs font-mono font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              className="cal-btn-secondary py-1.5 px-3 text-xs font-semibold rounded-lg flex items-center space-x-1.5 disabled:opacity-40"
             >
-              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-              <span>Auto-Sign for {sender}</span>
+              <Key className="w-3.5 h-3.5 text-gray-600" />
+              <span>Sign with {sender} Seed</span>
             </button>
           </div>
 
@@ -218,68 +263,73 @@ export default function NotarizeStudio({ onProofCreated }) {
               type="text"
               value={signature}
               onChange={(e) => setSignature(e.target.value)}
-              className="w-full glass-input rounded-lg px-3 py-2 text-xs font-mono"
-              placeholder="Base64 Ed25519 Signature"
+              className="cal-input font-mono text-xs"
+              placeholder="Base64 64-byte Ed25519 Detached Signature"
             />
           </div>
 
           {docHash && (
-            <div className="p-3 rounded-lg bg-cyber-900/50 text-[11px] font-mono text-slate-400 space-y-1 border border-white/5">
-              <span>Standard Message Payload:</span>
-              <div className="text-slate-300 break-all">
+            <div className="p-3.5 rounded-xl bg-gray-50 text-xs font-mono border border-gray-200 space-y-1">
+              <span className="text-gray-500 font-bold block text-[11px]">Canonical Signed Message:</span>
+              <div className="text-gray-800 break-all select-all font-mono">
                 {formatSignedMessage(docHash, sender, receiver, timestamp)}
               </div>
             </div>
           )}
         </div>
 
+        {/* Submit Button */}
         <button
           type="submit"
           disabled={!file || !signature || isSubmitting}
-          className="w-full flex items-center justify-center space-x-2 py-3.5 px-6 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold text-sm shadow-glow-cyan disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
+          className="w-full cal-btn-primary py-3.5 text-sm rounded-xl font-bold flex items-center justify-center space-x-2 shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Send className="w-4 h-4" />
-          <span>{isSubmitting ? 'Anchoring to Blockchain...' : 'Notarize & Anchor to Solana'}</span>
+          <span>{isSubmitting ? 'Writing to Solana Devnet...' : 'Submit Notarization to Solana Network'}</span>
+          <ArrowRight className="w-4 h-4 ml-1" />
         </button>
       </form>
 
+      {/* Confirmation Panel (Cal.com Receipt card) */}
       {result && (
-        <div className="glass-panel rounded-2xl p-6 border border-emerald-500/40 shadow-glow-emerald space-y-4 animate-fadeIn">
-          <div className="flex items-center justify-between">
+        <div className="cal-card p-6 border-2 border-emerald-300 bg-emerald-50/50 space-y-4 shadow-lg">
+          <div className="flex items-center justify-between pb-3 border-b border-emerald-200">
             <div className="flex items-center space-x-2.5">
-              <ShieldCheck className="w-6 h-6 text-emerald-400" />
-              <h3 className="text-lg font-bold font-mono text-emerald-300">
-                Notarization Confirmed
+              <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-extrabold text-emerald-950 font-sans">
+                Notarization Confirmed on Solana Devnet
               </h3>
             </div>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
-              PROOF CREATED
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+              PROOF RECORDED
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
-            <div className="p-3 rounded-lg bg-cyber-900/90 border border-white/5">
-              <span className="text-slate-500 block text-[10px]">Proof ID</span>
-              <div className="flex items-center justify-between mt-0.5">
-                <span className="text-slate-200 font-bold">{result.proof_id}</span>
+            <div className="p-3.5 rounded-xl bg-white border border-gray-200">
+              <span className="text-gray-500 block text-[10px]">Proof ID</span>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-gray-900 font-bold text-sm">{result.proof_id}</span>
                 <button
                   onClick={() => copyToClipboard(result.proof_id, 'proof_id')}
-                  className="text-slate-400 hover:text-cyan-300 cursor-pointer"
+                  className="text-gray-500 hover:text-black cursor-pointer font-sans"
                 >
-                  {copiedField === 'proof_id' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedField === 'proof_id' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>
 
-            <div className="p-3 rounded-lg bg-cyber-900/90 border border-white/5">
-              <span className="text-slate-500 block text-[10px]">Transfer Route</span>
-              <span className="text-slate-200 font-semibold mt-0.5 block">{result.sender} ➔ {result.receiver}</span>
+            <div className="p-3.5 rounded-xl bg-white border border-gray-200">
+              <span className="text-gray-500 block text-[10px]">Route</span>
+              <span className="text-gray-900 font-bold text-sm mt-1 block">{result.sender} ➔ {result.receiver}</span>
             </div>
           </div>
 
-          <div>
-            <span className="text-slate-500 block text-[10px] font-mono mb-1">Solana Tx Signature</span>
-            <div className="p-3 rounded-lg bg-cyber-900/90 text-xs font-mono text-purple-200 break-all border border-white/5">
+          <div className="text-xs font-mono">
+            <span className="text-gray-500 block text-[10px] mb-1">Transaction Signature:</span>
+            <div className="p-3 rounded-xl bg-white text-xs text-gray-800 break-all select-all border border-gray-200 font-bold">
               {result.tx_signature}
             </div>
           </div>
@@ -289,23 +339,24 @@ export default function NotarizeStudio({ onProofCreated }) {
               href={result.explorer_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center space-x-1.5 text-xs text-cyan-400 hover:text-cyan-300 font-mono"
+              className="cal-btn-primary py-2 px-4 text-xs rounded-lg flex items-center space-x-1.5"
             >
               <span>View on Solana Explorer</span>
-              <ExternalLink className="w-3.5 h-3.5" />
+              <ArrowUpRight className="w-3.5 h-3.5" />
             </a>
 
             <button
               type="button"
               onClick={() => copyToClipboard(JSON.stringify(result, null, 2), 'json')}
-              className="inline-flex items-center space-x-1 text-xs text-slate-400 hover:text-slate-200 font-mono cursor-pointer"
+              className="cal-btn-secondary py-2 px-4 text-xs rounded-lg font-mono flex items-center space-x-1.5"
             >
-              {copiedField === 'json' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copiedField === 'json' ? 'Copied Full Proof JSON' : 'Copy Full JSON'}</span>
+              {copiedField === 'json' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedField === 'json' ? 'Copied JSON' : 'Copy Proof JSON'}</span>
             </button>
           </div>
         </div>
       )}
+
     </div>
   );
 }

@@ -1,106 +1,122 @@
-﻿import React, { useEffect, useState } from 'react';
-import { ShieldCheck, Activity, Database, CheckCircle2, Server, Globe2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Shield, Activity, Database, CheckCircle2, Server, ArrowRight, Wifi } from 'lucide-react';
 import { checkHealth, getStoredProofs } from '../api';
+import PulsarGlassSegmented from './PulsarGlassSegmented';
 
 export default function Navbar({ activeTab, setActiveTab }) {
-  const [backendOnline, setBackendOnline] = useState(false);
+  const [backendOnline, setBackendOnline] = useState(true);
   const [proofCount, setProofCount] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
     const runCheck = async () => {
-      const res = await checkHealth();
-      setBackendOnline(res.online);
-      setProofCount(getStoredProofs().length);
+      try {
+        const res = await checkHealth();
+        if (!cancelled) {
+          setBackendOnline(res.online);
+          setProofCount(getStoredProofs().length);
+        }
+      } catch {
+        if (!cancelled) setBackendOnline(false);
+      }
     };
-
     runCheck();
     const interval = setInterval(runCheck, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [activeTab]);
 
+  const navOptions = [
+    { value: 'pipeline', label: 'Protocol Pipeline', icon: <Activity className="w-3.5 h-3.5" /> },
+    { value: 'notarize', label: 'Notarize Studio', icon: <Shield className="w-3.5 h-3.5" /> },
+    { value: 'verify', label: 'Verification Terminal', icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+    { value: 'ledger', label: 'Ledger & Registry', icon: <Database className="w-3.5 h-3.5" /> },
+  ];
+
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-cyber-950/80 backdrop-blur-xl">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-200">
+      <div className="max-w-page mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           
-          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setActiveTab('pipeline')}>
-            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-purple-600/20 border border-cyan-500/40 shadow-glow-cyan">
-              <ShieldCheck className="w-6 h-6 text-cyan-400" />
+          {/* Logo / Brand — Cal.com style bold logo */}
+          <div 
+            className="flex items-center space-x-2.5 cursor-pointer select-none"
+            onClick={() => setActiveTab('pipeline')}
+          >
+            <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center text-white shadow-sm">
+              <Shield className="w-4 h-4 fill-white" />
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-                  ChainNotary
-                </span>
-                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-800/50">
-                  v1.0
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 font-mono tracking-wider">
-                AI Agent Provenance Layer
-              </p>
+            <div className="flex items-center space-x-1.5">
+              <span className="font-bold text-lg tracking-tight text-gray-950 font-sans">
+                ChainNotary
+              </span>
+              <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">
+                v1.0
+              </span>
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center space-x-1">
-            {[
-              { id: 'pipeline', label: 'Interactive Pipeline', icon: Activity, badge: 'Live Demo' },
-              { id: 'notarize', label: 'Notarize Studio', icon: ShieldCheck },
-              { id: 'verify', label: 'Verification Terminal', icon: CheckCircle2 },
-              { id: 'ledger', label: 'Ledger & Agents', icon: Database },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                    isActive
-                      ? 'bg-cyber-800 text-cyan-400 border border-cyan-500/30 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-cyber-900/60'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
-                  <span>{tab.label}</span>
-                  {tab.badge && (
-                    <span className="text-[10px] uppercase font-mono px-1.5 py-0.2 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/50">
-                      {tab.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+          {/* Pulsar Glass — Liquid Segmented Slider Navigation (Compact sm size) */}
+          <nav className="hidden md:flex items-center">
+            <PulsarGlassSegmented
+              options={navOptions}
+              value={activeTab}
+              onChange={setActiveTab}
+              size="sm"
+              theme="light"
+            />
           </nav>
 
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg bg-cyber-900/90 border border-purple-500/30 text-xs font-mono text-purple-300">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
-              </span>
-              <Globe2 className="w-3.5 h-3.5 text-purple-400" />
-              <span className="hidden sm:inline">Solana Devnet</span>
+          {/* Right Status Badges & Quick Action */}
+          <div className="flex items-center space-x-2.5">
+            {/* Solana Devnet Pill */}
+            <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-200 text-xs font-mono text-gray-700">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="font-medium">Solana Devnet</span>
             </div>
 
-            <div className={`flex items-center space-x-2 px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-colors ${
+            {/* API Health Pill */}
+            <div className={`hidden lg:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-mono border ${
               backendOnline
-                ? 'bg-emerald-950/50 border-emerald-500/30 text-emerald-300'
-                : 'bg-amber-950/40 border-amber-500/30 text-amber-300'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-amber-50 text-amber-700 border-amber-200'
             }`}>
-              <Server className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">
-                {backendOnline ? 'FastAPI: Online' : 'FastAPI: Sandbox'}
-              </span>
-              <span className={`w-1.5 h-1.5 rounded-full ${backendOnline ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+              <Server className="w-3 h-3" />
+              <span>{backendOnline ? 'API Connected' : 'API Sandbox'}</span>
             </div>
 
-            <div className="hidden lg:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-cyber-900/70 border border-white/10 text-xs font-mono text-slate-300">
-              <span className="text-slate-500">Proofs:</span>
-              <span className="text-cyan-400 font-bold">{proofCount}</span>
-            </div>
+            {/* Cal.com style Get Started / Action button */}
+            <button
+              onClick={() => setActiveTab('pipeline')}
+              className="cal-btn-primary flex items-center space-x-1.5 text-xs py-1.5 px-3 rounded-full"
+            >
+              <span>Run Pipeline</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
 
+        </div>
+
+        {/* Mobile Navigation bar */}
+        <div className="flex md:hidden overflow-x-auto py-2 space-x-2 border-t border-gray-100 no-scrollbar">
+          {navOptions.map((opt) => {
+            const isActive = activeTab === opt.value;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => setActiveTab(opt.value)}
+                className={`whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium cursor-pointer ${
+                  isActive
+                    ? 'bg-black text-white'
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
         </div>
       </div>
     </header>
