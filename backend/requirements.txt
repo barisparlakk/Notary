@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-python-multipart
-pynacl
-solders
-solana
-aiosqlite
