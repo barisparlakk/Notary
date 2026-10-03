@@ -23,8 +23,18 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
 from .crypto import build_signed_message, sha256_hex, verify_ed25519
 from .db import get_agent, get_proof, insert_proof, upsert_agent
-from .models import AgentRecord, AgentRegisterRequest, NotarizeResponse, VerifyResponse
-from .solana_client import notarize_on_chain
+from .models import (
+    AgentRecord,
+    AgentRegisterRequest,
+    NotarizeResponse,
+    OnChainVerifyResponse,
+    VerifyResponse,
+)
+from .solana_client import (
+    get_wallet_pubkey,
+    notarize_on_chain,
+    verify_on_chain_tx,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -227,3 +237,69 @@ async def get_proof_detail(proof_id: str) -> NotarizeResponse:
             detail=f"'{proof_id}' bulunamadı.",
         )
     return proof
+
+
+# ---------------------------------------------------------------------------
+# GET /proofs/{proof_id}/verify-chain
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/proofs/{proof_id}/verify-chain",
+    response_model=OnChainVerifyResponse,
+    summary="Blokzincir üzerinden doğrudan proof doğrulama",
+    description="Proof kaydına ait Solana tx_signature'ı blokzincir üzerinde doğrular ve memo verisini çözer.",
+)
+async def verify_proof_on_chain(proof_id: str) -> OnChainVerifyResponse:
+    proof = await get_proof(proof_id)
+    if proof is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"'{proof_id}' bulunamadı.",
+        )
+    return await verify_on_chain_tx(
+        tx_signature=proof.tx_signature,
+        expected_hash=proof.document_hash,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /verify/tx
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/verify/tx",
+    response_model=OnChainVerifyResponse,
+    summary="Solana Tx Signature ile bağımsız doğrulama",
+    description="Herhangi bir Solana tx_signature değerini blokzincir üzerinden sorgular ve opsiyonel olarak belge hash'ini karşılaştırır.",
+)
+async def verify_tx_signature(
+    tx_signature: str = Form(..., description="Solana işlem imzası (Base58)"),
+    document_hash: str = Form(None, description="Opsiyonel karşılaştırılacak belge hash'i"),
+) -> OnChainVerifyResponse:
+    return await verify_on_chain_tx(
+        tx_signature=tx_signature,
+        expected_hash=document_hash,
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /solana/wallet
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/solana/wallet",
+    summary="Solana Devnet noter cüzdan bilgisi",
+    description="İşlemleri Devnet'e gönderen noter cüzdanının açık adresini döner.",
+)
+async def get_solana_wallet() -> dict:
+    pubkey = get_wallet_pubkey()
+    return {
+        "network": "devnet",
+        "cluster_url": "https://api.devnet.solana.com",
+        "wallet_pubkey": pubkey,
+        "explorer_url": f"https://explorer.solana.com/address/{pubkey}?cluster=devnet",
+    }
+
