@@ -1,0 +1,1 @@
+# aiosqlite veritabanı erişimi — placeholder
