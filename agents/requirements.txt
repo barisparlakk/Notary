@@ -3,3 +3,7 @@ requests
 rich
 reportlab
 anthropic
+fastapi
+uvicorn
+python-multipart
+pytest
