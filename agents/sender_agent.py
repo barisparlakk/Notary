@@ -104,6 +104,6 @@ if __name__ == "__main__":
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--topic", default="")
-    ap.add_argument("--llm", action="store_true", help="Anthropic LLM kullan (ANTHROPIC_API_KEY gerekir)")
+    ap.add_argument("--llm", action="store_true", help="LLM function calling kullan (varsayılan: yerel Ollama; bkz. llm.py)")
     a = ap.parse_args()
     run(a.topic, use_llm=a.llm)

@@ -1,7 +1,7 @@
 # Uçtan uca demo: A -> notarize -> B -> verify -> VERIFIED; sonra PDF'e 1 byte ekle -> INVALID.
 # Kullanım: python demo.py --mock        (yerel mock sunucuyla)
 #           python demo.py               (API_URL'deki gerçek backend ile)
-#           python demo.py --llm         (LLM function calling ile; ANTHROPIC_API_KEY gerekir)
+#           python demo.py --llm         (LLM function calling ile; varsayılan yerel Ollama, anahtar gerekmez)
 import argparse
 import shutil
 import socket
@@ -101,7 +101,7 @@ def main():
     ap = argparse.ArgumentParser(description="Notary uçtan uca demo: VERIFIED ve INVALID senaryosu")
     ap.add_argument("--mock", action="store_true", help="yerel mock sunucu başlat")
     ap.add_argument("--api-url", default=None, help="varsayılan: API_URL env / http://localhost:8000")
-    ap.add_argument("--llm", action="store_true", help="agent'lar Anthropic function calling kullansın")
+    ap.add_argument("--llm", action="store_true", help="agent'lar LLM function calling kullansın (yerel Ollama / LLM_PROVIDER)")
     ap.add_argument("--topic", default="Q3 delivery integrity report")
     ap.add_argument("--chain", action="store_true", help="Research -> Analysis -> Decision zinciri ve provenance sorgusu ekle")
     ap.add_argument("--delay", type=float, default=0.5, help="adımlar arası bekleme (sn)")
