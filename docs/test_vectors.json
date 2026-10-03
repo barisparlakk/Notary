@@ -1,9 +1,11 @@
 {
-  "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
-  "document_hash": "aab38ec286c0fdcf2364733ff773128dcd7af5b56e787911e16f2c846d67f6ea",
+  "private_key_b64": "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=",
+  "public_key_b64": "IVL40Zt5HSRFMkLhXy6rbLfP+ntqXtMAl5YOBpiB2xI=",
+  "file_content_ascii": "ChainNotary Test Vector Document v1",
+  "document_hash": "b08479279e4198a307b22101714a3bf1d1797753c46d24ea5e1fbfa715e58a66",
   "sender": "agent_a",
   "receiver": "agent_b",
   "timestamp": "2026-10-03T18:30:00Z",
-  "message": "notary:v1|aab38ec286c0fdcf2364733ff773128dcd7af5b56e787911e16f2c846d67f6ea|agent_a|agent_b|2026-10-03T18:30:00Z",
-  "signature": "IeVXHQdEWOUbr8aiLUPjpa2VcDoIBtGPEu60U2892J2QtCf0jyGj6KYuKwsPNf+GujaZzU4DVwKMp0dv8O3UDw=="
+  "signed_message": "chainnotary:v1|b08479279e4198a307b22101714a3bf1d1797753c46d24ea5e1fbfa715e58a66|agent_a|agent_b|2026-10-03T18:30:00Z",
+  "signature_b64": "ylwwMj8xSNPGT01t9+c2FNcpvxlG7DAJahto//JoxHXCtciw2s1atMQTWPtID4garll8AU0Lzn1UAn0tFFiHDQ=="
 }

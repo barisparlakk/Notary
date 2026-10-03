@@ -5,3 +5,5 @@ pynacl
 solders
 solana
 aiosqlite
+pytest
+httpx
