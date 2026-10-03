@@ -4,7 +4,7 @@ Kriptografik yardımcı fonksiyonlar.
 Sabitler (CONTRACT.md):
   - Hash    : SHA-256, küçük harf hex
   - İmza    : Ed25519, Base64
-  - Mesaj   : chainnotary:v1|{document_hash}|{sender}|{receiver}|{timestamp}
+  - Mesaj   : notary:v1|{document_hash}|{sender}|{receiver}|{timestamp}
 
 Sadece PyNaCl ve standart kütüphane kullanılır; ek bağımlılık yok.
 """
@@ -47,7 +47,7 @@ def build_signed_message(
 ) -> str:
     """
     Sözleşmeye göre imzalanacak kanonik mesaj dizesi:
-        chainnotary:v1|{document_hash}|{sender}|{receiver}|{timestamp}
+        notary:v1|{document_hash}|{sender}|{receiver}|{timestamp}
 
     Tüm alanlar ham string; herhangi bir encoding yapılmaz.
     """

@@ -43,11 +43,11 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Uygulama ömrü boyunca DB init ve temizlik."""
-    logger.info("ChainNotary Backend başlıyor…")
+    logger.info("Notary Backend başlıyor…")
     await init_db()
     logger.info("DB hazır. Servis talepleri alınıyor.")
     yield
-    logger.info("ChainNotary Backend kapanıyor.")
+    logger.info("Notary Backend kapanıyor.")
 
 
 # ---------------------------------------------------------------------------
@@ -55,7 +55,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 # ---------------------------------------------------------------------------
 
 app = FastAPI(
-    title="ChainNotary API",
+    title="Notary API",
     description=(
         "AI ajanları arası dijital artifact güven katmanı. "
         "Ed25519 imzalama + SHA-256 hash + Solana Devnet memo kanıtı."

@@ -105,7 +105,7 @@ async def notarize(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 f"İmza doğrulama başarısız. "
-                f"Beklenen mesaj formatı: 'chainnotary:v1|<hash>|{sender}|{receiver}|{timestamp}'"
+                f"Beklenen mesaj formatı: 'notary:v1|<hash>|{sender}|{receiver}|{timestamp}'"
             ),
         )
 

@@ -47,12 +47,12 @@ def _generate_vectors() -> dict:
     pub_b64 = base64.b64encode(bytes(signing_key.verify_key)).decode()
     priv_b64 = base64.b64encode(bytes(signing_key)).decode()
 
-    file_content = b"ChainNotary Test Vector Document v1"
+    file_content = b"Notary Test Vector Document v1"
     document_hash = hashlib.sha256(file_content).hexdigest()
     sender = "agent_a"
     receiver = "agent_b"
     timestamp = "2026-10-03T18:30:00Z"
-    message = f"chainnotary:v1|{document_hash}|{sender}|{receiver}|{timestamp}"
+    message = f"notary:v1|{document_hash}|{sender}|{receiver}|{timestamp}"
 
     signed = signing_key.sign(message.encode("utf-8"))
     signature_b64 = base64.b64encode(signed.signature).decode()
@@ -82,7 +82,7 @@ def _load_vectors() -> dict:
         with open(VECTORS_PATH) as f:
             data = json.load(f)
         # Dosya boş ya da eski format ise yeniden üret
-        if not data or "document_hash" not in data:
+        if not data or "document_hash" not in data or not data.get("signed_message", "").startswith("notary:v1|"):
             return _generate_vectors()
         return data
     return _generate_vectors()
@@ -119,7 +119,7 @@ class TestCryptoVectors:
         assert sha256_hex(content) == self.v["document_hash"]
 
     def test_build_signed_message(self):
-        """Mesaj formatı: chainnotary:v1|hash|sender|receiver|timestamp"""
+        """Mesaj formatı: notary:v1|hash|sender|receiver|timestamp"""
         from app.crypto import build_signed_message
 
         msg = build_signed_message(
@@ -129,7 +129,7 @@ class TestCryptoVectors:
             self.v["timestamp"],
         )
         assert msg == self.v["signed_message"]
-        assert msg.startswith("chainnotary:v1|")
+        assert msg.startswith("notary:v1|")
 
     def test_verify_ed25519_valid(self):
         """Geçerli imza DOĞRULANMALI."""
@@ -180,8 +180,8 @@ class TestCryptoVectors:
         """
         from app.crypto import sha256_hex
 
-        original = b"ChainNotary Test Vector Document v1"
-        tampered = b"ChainNotary Test Vector Document v2"   # sadece son karakter farklı
+        original = b"Notary Test Vector Document v1"
+        tampered = b"Notary Test Vector Document v2"   # sadece son karakter farklı
 
         h1 = sha256_hex(original)
         h2 = sha256_hex(tampered)
