@@ -1,37 +1,41 @@
-# docs/test_vectors.json vektörünü doğrular.
+# docs/test_vectors.json (backend ile ortak vektör) üzerinden crypto.py'yi doğrular.
 import json
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import crypto  # noqa: E402
+import crypto
 
 VECTOR = json.loads((Path(__file__).resolve().parents[2] / "docs" / "test_vectors.json").read_text())
 
 
 def test_hash():
-    assert crypto.sha256_hex(b"hello notara") == VECTOR["document_hash"]
+    assert crypto.sha256_hex(VECTOR["file_content_ascii"].encode()) == VECTOR["document_hash"]
 
 
 def test_message():
     v = VECTOR
-    assert crypto.build_message(v["document_hash"], v["sender"], v["receiver"], v["timestamp"]) == v["message"]
+    assert crypto.build_message(v["document_hash"], v["sender"], v["receiver"], v["timestamp"]) == v["signed_message"]
+    assert v["signed_message"].startswith("notary:v1|")
 
 
 def test_signature_verifies():
     v = VECTOR
-    assert crypto.verify_signature(v["public_key"], v["message"], v["signature"])
+    assert crypto.verify_signature(v["public_key_b64"], v["signed_message"], v["signature_b64"])
 
 
-def test_signature_deterministic_from_seed():
-    priv, pub = crypto.keypair_from_seed(bytes([1]) * 32)
-    assert pub == VECTOR["public_key"]
-    assert crypto.sign(priv, VECTOR["message"]) == VECTOR["signature"]
+def test_signature_matches_backend_vector():
+    """Aynı private key + mesaj -> aynı imza (Ed25519 deterministik)."""
+    v = VECTOR
+    assert crypto.sign(v["private_key_b64"], v["signed_message"]) == v["signature_b64"]
+
+
+def test_seed_keypair_matches_vector():
+    priv, pub = crypto.keypair_from_seed(bytes([0x42]) * 32)
+    assert (priv, pub) == (VECTOR["private_key_b64"], VECTOR["public_key_b64"])
 
 
 def test_tampered_message_fails():
     v = VECTOR
-    assert not crypto.verify_signature(v["public_key"], v["message"] + "x", v["signature"])
+    assert not crypto.verify_signature(v["public_key_b64"], v["signed_message"] + "x", v["signature_b64"])
 
 
 def test_save_load_roundtrip(tmp_path):

@@ -1,9 +1,11 @@
 {
-  "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
-  "document_hash": "aab38ec286c0fdcf2364733ff773128dcd7af5b56e787911e16f2c846d67f6ea",
+  "private_key_b64": "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=",
+  "public_key_b64": "IVL40Zt5HSRFMkLhXy6rbLfP+ntqXtMAl5YOBpiB2xI=",
+  "file_content_ascii": "Notary Test Vector Document v1",
+  "document_hash": "055e95ec4e2aa4543afa1569901d08fff259d0deb8e81cea80b434b4aa601d27",
   "sender": "agent_a",
   "receiver": "agent_b",
   "timestamp": "2026-10-03T18:30:00Z",
-  "message": "notary:v1|aab38ec286c0fdcf2364733ff773128dcd7af5b56e787911e16f2c846d67f6ea|agent_a|agent_b|2026-10-03T18:30:00Z",
-  "signature": "IeVXHQdEWOUbr8aiLUPjpa2VcDoIBtGPEu60U2892J2QtCf0jyGj6KYuKwsPNf+GujaZzU4DVwKMp0dv8O3UDw=="
+  "signed_message": "notary:v1|055e95ec4e2aa4543afa1569901d08fff259d0deb8e81cea80b434b4aa601d27|agent_a|agent_b|2026-10-03T18:30:00Z",
+  "signature_b64": "fSXPYckNsOtvUT1Si07W8FgOGH5h+uDaHANZw/g95tpOPKJ3Gtkw4lNJqoF/3mLknvRkC39TFnhlOF5mSjeqDw=="
 }
