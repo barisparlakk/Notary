@@ -338,6 +338,22 @@ class TestEndpointsE2E:
         )
         assert resp.status_code == 400
 
+    def test_notarize_invalid_timestamp(self, client, vectors):
+        """ISO 8601 UTC olmayan timestamp → 400."""
+        resp = client.post(
+            "/notarize",
+            data={
+                "sender": vectors["sender"],
+                "receiver": vectors["receiver"],
+                "timestamp": "invalid-timestamp-2026",
+                "signature": vectors["signature_b64"],
+            },
+            files={"file": ("report.pdf", vectors["file_content_ascii"].encode(), "text/plain")},
+        )
+        assert resp.status_code == 400
+        assert "timestamp" in resp.json()["detail"].lower()
+
+
     # -----------------------------------------------------------------------
     # /verify
     # -----------------------------------------------------------------------

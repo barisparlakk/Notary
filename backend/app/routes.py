@@ -94,6 +94,15 @@ async def notarize(
             detail="Yüklenen dosya boş.",
         )
 
+    # ---- 1.1 Timestamp validasyonu (ISO 8601 UTC) ----
+    from .models import _ISO_UTC_RE
+
+    if not _ISO_UTC_RE.match(timestamp):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Geçersiz timestamp formatı. ISO 8601 UTC (örn. 2026-10-03T18:30:00Z) formatında olmalıdır.",
+        )
+
     # ---- 2. SHA-256 hash ----
     document_hash = sha256_hex(content)
 
