@@ -77,3 +77,10 @@ def test_get_client_requires_key(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     with pytest.raises(RuntimeError):
         llm.get_client()
+
+
+def test_demo_scenario_passes(monkeypatch, capsys):
+    import demo
+
+    monkeypatch.setattr("sys.argv", ["demo.py", "--mock", "--delay", "0"])
+    assert demo.main() == 0
