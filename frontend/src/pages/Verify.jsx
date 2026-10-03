@@ -1,4 +1,5 @@
-// Verify sayfası — placeholder
-export default function Verify() {
-  return null;
+﻿import VerificationTerminal from '../components/VerificationTerminal';
+
+export default function Verify(props) {
+  return <VerificationTerminal {...props} />;
 }
