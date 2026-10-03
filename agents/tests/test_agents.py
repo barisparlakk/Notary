@@ -82,5 +82,5 @@ def test_get_client_requires_key(monkeypatch):
 def test_demo_scenario_passes(monkeypatch, capsys):
     import demo
 
-    monkeypatch.setattr("sys.argv", ["demo.py", "--mock", "--delay", "0"])
+    monkeypatch.setattr("sys.argv", ["demo.py", "--mock", "--delay", "0", "--chain"])
     assert demo.main() == 0

@@ -16,6 +16,7 @@ from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
 
+import chain
 import client
 import receiver_agent
 import sender_agent
@@ -61,12 +62,48 @@ def result_panel(res, filename, expected):
     return res["status"] == expected
 
 
+def lineage_table(rows):
+    t = Table(title="Bu karar hangi dosyalara dayandı?", title_style="bold")
+    for col in ("rol", "gönderen → alıcı", "proof_id", "dosya bütünlüğü"):
+        t.add_column(col)
+    for r in rows:
+        color = "green" if r["status"] == "VERIFIED" else "red"
+        t.add_row(r["role"], f"{r['sender']} → {r['receiver']}", short(r["proof_id"], 14),
+                  f"[{color}]{r['status']}[/]")
+    console.print(t)
+
+
+def run_chain_section(a, api_url, log):
+    ledger = chain.Ledger(chain.LEDGER_PATH)
+    ledger.data = {"artifacts": {}}  # demo her çalıştırmada temiz ledger ile başlar
+    if chain.CHAIN_DIR.exists():
+        shutil.rmtree(chain.CHAIN_DIR)
+
+    step(7, "Zincir: Research → Analysis → Decision", a.delay)
+    out = chain.run_chain("Should we adopt notarized agent handoffs?", ledger=ledger, use_llm=a.llm,
+                          api_url=api_url, log=log)
+    step(8, "Provenance sorgusu", a.delay)
+    rows = chain.explain(out["decision"], ledger, api_url=api_url)
+    lineage_table(rows)
+    ok_a = all(r["status"] == "VERIFIED" for r in rows)
+
+    step(9, "Kaynak dosyalardan biri sonradan değiştirilirse", a.delay)
+    research = Path(ledger.get(rows[0]["proof_id"])["file"])
+    with open(research, "ab") as f:
+        f.write(b"\x00")
+    rows2 = chain.explain(out["decision"], ledger, api_url=api_url)
+    lineage_table(rows2)
+    ok_b = [r["status"] for r in rows2] == ["INVALID", "VERIFIED"]
+    return ok_a and ok_b
+
+
 def main():
     ap = argparse.ArgumentParser(description="Notary uçtan uca demo: VERIFIED ve INVALID senaryosu")
     ap.add_argument("--mock", action="store_true", help="yerel mock sunucu başlat")
     ap.add_argument("--api-url", default=None, help="varsayılan: API_URL env / http://localhost:8000")
     ap.add_argument("--llm", action="store_true", help="agent'lar Anthropic function calling kullansın")
     ap.add_argument("--topic", default="Q3 delivery integrity report")
+    ap.add_argument("--chain", action="store_true", help="Research -> Analysis -> Decision zinciri ve provenance sorgusu ekle")
     ap.add_argument("--delay", type=float, default=0.5, help="adımlar arası bekleme (sn)")
     a = ap.parse_args()
 
@@ -112,11 +149,12 @@ def main():
         step(6, "agent_b: değiştirilmiş dosyayı doğrula", a.delay)
         res2 = receiver_agent.receive(tampered, proof["proof_id"], use_llm=a.llm, api_url=api_url, log=log)
         ok2 = result_panel(res2, tampered.name, "INVALID")
+        ok3 = run_chain_section(a, api_url, log) if a.chain else True
     finally:
         if server:
             server.should_exit = True
 
-    passed = ok1 and ok2
+    passed = ok1 and ok2 and ok3
     console.print(Rule(style="green" if passed else "red"))
     console.print(
         "[bold green]Demo başarılı:[/] orijinal VERIFIED, 1 byte değişiklik INVALID." if passed
