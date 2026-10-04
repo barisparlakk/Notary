@@ -3,15 +3,19 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+**/venv/
 .pytest_cache/
 
 # Node
 node_modules/
 dist/
 
-# Env & data
+# Env & data & keys
 .env
 *.db
+keys/
+backend/keys/
+*.key
 
 # OS
 .DS_Store

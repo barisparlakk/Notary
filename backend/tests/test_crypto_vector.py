@@ -47,12 +47,12 @@ def _generate_vectors() -> dict:
     pub_b64 = base64.b64encode(bytes(signing_key.verify_key)).decode()
     priv_b64 = base64.b64encode(bytes(signing_key)).decode()
 
-    file_content = b"ChainNotary Test Vector Document v1"
+    file_content = b"Notary Test Vector Document v1"
     document_hash = hashlib.sha256(file_content).hexdigest()
     sender = "agent_a"
     receiver = "agent_b"
     timestamp = "2026-10-03T18:30:00Z"
-    message = f"chainnotary:v1|{document_hash}|{sender}|{receiver}|{timestamp}"
+    message = f"notary:v1|{document_hash}|{sender}|{receiver}|{timestamp}"
 
     signed = signing_key.sign(message.encode("utf-8"))
     signature_b64 = base64.b64encode(signed.signature).decode()
@@ -82,7 +82,7 @@ def _load_vectors() -> dict:
         with open(VECTORS_PATH) as f:
             data = json.load(f)
         # Dosya boş ya da eski format ise yeniden üret
-        if not data or "document_hash" not in data:
+        if not data or "document_hash" not in data or not data.get("signed_message", "").startswith("notary:v1|"):
             return _generate_vectors()
         return data
     return _generate_vectors()
@@ -119,7 +119,7 @@ class TestCryptoVectors:
         assert sha256_hex(content) == self.v["document_hash"]
 
     def test_build_signed_message(self):
-        """Mesaj formatı: chainnotary:v1|hash|sender|receiver|timestamp"""
+        """Mesaj formatı: notary:v1|hash|sender|receiver|timestamp"""
         from app.crypto import build_signed_message
 
         msg = build_signed_message(
@@ -129,7 +129,32 @@ class TestCryptoVectors:
             self.v["timestamp"],
         )
         assert msg == self.v["signed_message"]
-        assert msg.startswith("chainnotary:v1|")
+        assert msg.startswith("notary:v1|")
+
+    def test_solana_memo_format_and_parse(self):
+        """Solana memo formatı na1|... oluşturulmalı ve çözümlenebilmeli."""
+        from app.solana_client import build_memo, parse_memo
+
+        memo = build_memo(
+            self.v["document_hash"],
+            self.v["sender"],
+            self.v["receiver"],
+            self.v["timestamp"],
+        )
+        assert memo.startswith("na1|")
+        assert self.v["document_hash"] in memo
+
+        parsed = parse_memo(memo)
+        assert parsed is not None
+        assert parsed.version == "na1"
+        assert parsed.document_hash == self.v["document_hash"]
+        assert parsed.sender == self.v["sender"]
+        assert parsed.receiver == self.v["receiver"]
+        assert parsed.timestamp == self.v["timestamp"]
+
+        # Geçersiz memo ayrıştırma testi
+        assert parse_memo("invalid_memo_without_pipes") is None
+        assert parse_memo("na2|only|three|parts") is None
 
     def test_verify_ed25519_valid(self):
         """Geçerli imza DOĞRULANMALI."""
@@ -180,8 +205,8 @@ class TestCryptoVectors:
         """
         from app.crypto import sha256_hex
 
-        original = b"ChainNotary Test Vector Document v1"
-        tampered = b"ChainNotary Test Vector Document v2"   # sadece son karakter farklı
+        original = b"Notary Test Vector Document v1"
+        tampered = b"Notary Test Vector Document v2"   # sadece son karakter farklı
 
         h1 = sha256_hex(original)
         h2 = sha256_hex(tampered)
@@ -313,6 +338,22 @@ class TestEndpointsE2E:
         )
         assert resp.status_code == 400
 
+    def test_notarize_invalid_timestamp(self, client, vectors):
+        """ISO 8601 UTC olmayan timestamp → 400."""
+        resp = client.post(
+            "/notarize",
+            data={
+                "sender": vectors["sender"],
+                "receiver": vectors["receiver"],
+                "timestamp": "invalid-timestamp-2026",
+                "signature": vectors["signature_b64"],
+            },
+            files={"file": ("report.pdf", vectors["file_content_ascii"].encode(), "text/plain")},
+        )
+        assert resp.status_code == 400
+        assert "timestamp" in resp.json()["detail"].lower()
+
+
     # -----------------------------------------------------------------------
     # /verify
     # -----------------------------------------------------------------------
@@ -369,3 +410,63 @@ class TestEndpointsE2E:
         """Olmayan proof_id → 404."""
         resp = client.get("/proofs/proof_does_not_exist")
         assert resp.status_code == 404
+
+    # -----------------------------------------------------------------------
+    # Solana On-Chain & Tx Signature Doğrulama Testleri
+    # -----------------------------------------------------------------------
+
+    def test_solana_wallet_info(self, client):
+        """Noter Solana cüzdan adresi sorgulanabilmeli."""
+        resp = client.get("/solana/wallet")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["network"] == "devnet"
+        assert "wallet_pubkey" in body
+        assert "explorer_url" in body
+
+    def test_verify_proof_on_chain(self, client, vectors):
+        """Proof kaydı Solana zincir üstü doğrulamadan geçmeli."""
+        resp = client.get(f"/proofs/{TestEndpointsE2E._proof_id}/verify-chain")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "VERIFIED"
+        assert body["hash_match"] is True
+        assert body["parsed_memo"]["document_hash"] == vectors["document_hash"]
+        assert body["parsed_memo"]["version"] == "na1"
+
+    def test_verify_tx_signature_valid(self, client, vectors):
+        """Doğrudan tx_signature ile doğrulama başarılı olmalı."""
+        # Notarize yanıtından aldığımız proof'u çek
+        proof_resp = client.get(f"/proofs/{TestEndpointsE2E._proof_id}").json()
+        tx_sig = proof_resp["tx_signature"]
+
+        resp = client.post(
+            "/verify/tx",
+            data={
+                "tx_signature": tx_sig,
+                "document_hash": vectors["document_hash"],
+            },
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "VERIFIED"
+        assert body["hash_match"] is True
+        assert body["parsed_memo"]["document_hash"] == vectors["document_hash"]
+
+    def test_verify_tx_signature_tampered_hash(self, client, vectors):
+        """Doğru tx_signature ancak değiştirilmiş hash → INVALID dönmeli."""
+        proof_resp = client.get(f"/proofs/{TestEndpointsE2E._proof_id}").json()
+        tx_sig = proof_resp["tx_signature"]
+
+        resp = client.post(
+            "/verify/tx",
+            data={
+                "tx_signature": tx_sig,
+                "document_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            },
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "INVALID"
+        assert body["hash_match"] is False
+

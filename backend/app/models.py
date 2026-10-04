@@ -109,3 +109,37 @@ class VerifyResponse(BaseModel):
         default=None,
         description="İnsan okunabilir açıklama (hata veya başarı notu)",
     )
+
+
+# ---------------------------------------------------------------------------
+# Solana On-Chain Doğrulama Modelleri
+# ---------------------------------------------------------------------------
+
+class ParsedMemo(BaseModel):
+    """Solana memo instruction'ından çözülen kanonik veri (na1|...)."""
+
+    version: str = Field(description="Memo protokol sürümü (örn. na1)")
+    document_hash: str = Field(description="Kayıtlı SHA-256 belge hash'i")
+    sender: str = Field(description="Gönderici ajan ID")
+    receiver: str = Field(description="Alıcı ajan ID")
+    timestamp: str = Field(description="ISO 8601 UTC zaman damgası")
+
+
+class OnChainVerifyResponse(BaseModel):
+    """Tx signature ile Solana zincir üstü doğrudan doğrulama yanıtı."""
+
+    status: Literal["VERIFIED", "INVALID"]
+    tx_signature: str = Field(description="Solana işlem imzası (Base58)")
+    cluster: str = Field(default="devnet", description="Solana kümesi")
+    is_live_chain: bool = Field(description="Gerçek Solana RPC üzerinden mi doğrulandı?")
+    parsed_memo: Optional[ParsedMemo] = Field(
+        default=None,
+        description="Zincirden çekilen ve çözümlenen memo",
+    )
+    hash_match: Optional[bool] = Field(
+        default=None,
+        description="Zincirdeki hash beklenen/verilen hash ile eşleşti mi?",
+    )
+    explorer_url: str = Field(description="Solana Explorer işlem bağlantısı")
+    detail: str = Field(description="Doğrulama durum açıklaması")
+
