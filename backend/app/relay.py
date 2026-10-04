@@ -130,7 +130,7 @@ async def relay(req: RelayRequest, request: Request) -> RelayResponse:
         raise HTTPException(400, "Signer signature is missing or invalid.") from None
 
     try:
-        sig = await _rpc("sendTransaction", [base64.b64encode(bytes(tx)).decode(), {"encoding": "base64"}])
+        sig = await _rpc("sendTransaction", [base64.b64encode(bytes(tx)).decode(), {"encoding": "base64", "preflightCommitment": "confirmed"}])
         for _ in range(40):  # ~20 sn
             st = (await _rpc("getSignatureStatuses", [[sig]]))["value"][0]
             if st and st.get("err"):

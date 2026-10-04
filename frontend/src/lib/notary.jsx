@@ -48,7 +48,7 @@ function NotaryState({ children }) {
 export function NotaryProvider({ children }) {
   const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], []);
   return (
-    <ConnectionProvider endpoint={RPC_URL}>
+    <ConnectionProvider endpoint={RPC_URL} config={{ commitment: 'confirmed' }}>
       <WalletProvider wallets={wallets} autoConnect>
         <NotaryState>{children}</NotaryState>
       </WalletProvider>

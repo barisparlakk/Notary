@@ -2,8 +2,8 @@
 // Her (signer, document_hash) çifti için tek bir Proof PDA'sı. Zaman zincirin saatinden gelir.
 use anchor_lang::prelude::*;
 
-// Placeholder: `anchor keys sync` gerçek program ID'sini yazar (docs/test_vectors_v2.json'daki test ID'si ile aynı).
-declare_id!("GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB");
+// Devnet program kimliği (docs/deployment.json). Anahtar çifti repoda DEĞİL, deploy eden kişide durur.
+declare_id!("7HCpWChK9pXXAsUzAvA8zq3pi6EwuaUJnkk8XqMn1swN");
 
 pub const MAX_PARENTS: usize = 4;
 

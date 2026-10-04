@@ -5,10 +5,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-notary = "GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB"
+notary = "7HCpWChK9pXXAsUzAvA8zq3pi6EwuaUJnkk8XqMn1swN"
 
 [programs.devnet]
-notary = "GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB"
+notary = "7HCpWChK9pXXAsUzAvA8zq3pi6EwuaUJnkk8XqMn1swN"
 
 [registry]
 url = "https://api.apr.dev"

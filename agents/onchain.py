@@ -22,6 +22,9 @@ RPC_URL = os.environ.get("SOLANA_RPC_URL", "https://api.devnet.solana.com")
 PROGRAM_ID = os.environ.get("PROGRAM_ID", "")
 KEYS_DIR = Path(__file__).parent / "keys"
 
+# Yeni işlem "confirmed" olur olmaz okunabilmeli; Solana'nın varsayılanı "finalized" (~13 sn gecikme).
+COMMITMENT = "confirmed"
+
 MAX_PARENTS = 4
 NOTARIZE_DISC = hashlib.sha256(b"global:notarize").digest()[:8]
 PROOF_DISC = hashlib.sha256(b"account:Proof").digest()[:8]
@@ -129,7 +132,7 @@ class Rpc:
         return body["result"]
 
     def get_account(self, pubkey):
-        value = self.call("getAccountInfo", [str(pubkey), {"encoding": "base64"}])["value"]
+        value = self.call("getAccountInfo", [str(pubkey), {"encoding": "base64", "commitment": COMMITMENT}])["value"]
         if value is None:
             return None
         return {"owner": value["owner"], "data": base64.b64decode(value["data"][0])}
@@ -137,14 +140,17 @@ class Rpc:
     def get_program_accounts(self, program_id, offset, raw: bytes):
         """memcmp süzgeci; raw 32 bayt (base58'e Pubkey ile çevrilir)."""
         flt = [{"memcmp": {"offset": offset, "bytes": str(Pubkey.from_bytes(raw))}}]
-        items = self.call("getProgramAccounts", [str(program_id), {"encoding": "base64", "filters": flt}])
+        items = self.call("getProgramAccounts", [str(program_id), {"encoding": "base64", "filters": flt, "commitment": COMMITMENT}])
         return [(it["pubkey"], base64.b64decode(it["account"]["data"][0])) for it in items]
 
     def latest_blockhash(self):
-        return Hash.from_string(self.call("getLatestBlockhash")["value"]["blockhash"])
+        return Hash.from_string(self.call("getLatestBlockhash", [{"commitment": COMMITMENT}])["value"]["blockhash"])
 
     def send(self, tx: Transaction):
-        return self.call("sendTransaction", [base64.b64encode(bytes(tx)).decode(), {"encoding": "base64"}])
+        return self.call(
+            "sendTransaction",
+            [base64.b64encode(bytes(tx)).decode(), {"encoding": "base64", "preflightCommitment": COMMITMENT}],
+        )
 
     def confirm(self, signature, timeout=60):
         end = time.time() + timeout
@@ -163,7 +169,7 @@ class Rpc:
         return sig
 
     def balance(self, pubkey):
-        return self.call("getBalance", [str(pubkey)])["value"]
+        return self.call("getBalance", [str(pubkey), {"commitment": COMMITMENT}])["value"]
 
 
 # --------------------------------------------------------------------- işlemler
