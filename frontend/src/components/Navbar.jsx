@@ -1,21 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { Shield, Activity, Database, CheckCircle2, Server, ArrowRight, Wifi } from 'lucide-react';
-import { checkHealth, getStoredProofs } from '../api';
+import { Shield, Activity, Database, CheckCircle2, Server, FlaskConical } from 'lucide-react';
+import { checkHealth } from '../api';
+import { API_URL } from '../lib/config';
+import { useNotary } from '../lib/notary';
 import PulsarGlassSegmented from './PulsarGlassSegmented';
+import WalletButton from './WalletButton';
 
 export default function Navbar({ activeTab, setActiveTab }) {
-  const [backendOnline, setBackendOnline] = useState(true);
-  const [proofCount, setProofCount] = useState(0);
+  const { isDemo, cluster } = useNotary();
+  const [backendOnline, setBackendOnline] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    // API opsiyoneldir (yalnızca /relay ve indeksleyici); doğrulama ona bağlı değildir.
     const runCheck = async () => {
+      if (!API_URL) return;
       try {
         const res = await checkHealth();
-        if (!cancelled) {
-          setBackendOnline(res.online);
-          setProofCount(getStoredProofs().length);
-        }
+        if (!cancelled) setBackendOnline(res.online);
       } catch {
         if (!cancelled) setBackendOnline(false);
       }
@@ -50,10 +52,10 @@ export default function Navbar({ activeTab, setActiveTab }) {
             </div>
             <div className="flex items-center space-x-1.5">
               <span className="font-bold text-lg tracking-tight text-gray-950 font-sans">
-                ChainNotary
+                Notary
               </span>
               <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">
-                v1.0
+                v2.0
               </span>
             </div>
           </div>
@@ -71,30 +73,32 @@ export default function Navbar({ activeTab, setActiveTab }) {
 
           {/* Right Status Badges & Quick Action */}
           <div className="flex items-center space-x-2.5">
-            {/* Solana Devnet Pill */}
-            <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-200 text-xs font-mono text-gray-700">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="font-medium">Solana Devnet</span>
-            </div>
+            {/* Solana cluster / DEMO Pill */}
+            {isDemo ? (
+              <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-xs font-mono text-amber-700" title="Nothing is written on-chain in DEMO mode">
+                <FlaskConical className="w-3 h-3" />
+                <span className="font-medium">DEMO · not on-chain</span>
+              </div>
+            ) : (
+              <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-200 text-xs font-mono text-gray-700">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="font-medium">Solana {cluster === 'devnet' ? 'Devnet' : cluster}</span>
+              </div>
+            )}
 
-            {/* API Health Pill */}
-            <div className={`hidden lg:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-mono border ${
-              backendOnline
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-amber-50 text-amber-700 border-amber-200'
-            }`}>
-              <Server className="w-3 h-3" />
-              <span>{backendOnline ? 'API Connected' : 'API Sandbox'}</span>
-            </div>
+            {/* Optional helper API pill (verification does not depend on it) */}
+            {API_URL && (
+              <div className={`hidden lg:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-mono border ${
+                backendOnline
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-gray-50 text-gray-600 border-gray-200'
+              }`} title="Optional helper API (relay / index). On-chain verification works without it.">
+                <Server className="w-3 h-3" />
+                <span>{backendOnline ? 'API online' : 'API offline (optional)'}</span>
+              </div>
+            )}
 
-            {/* Cal.com style Get Started / Action button */}
-            <button
-              onClick={() => setActiveTab('pipeline')}
-              className="cal-btn-primary flex items-center space-x-1.5 text-xs py-1.5 px-3 rounded-full"
-            >
-              <span>Run Pipeline</span>
-              <ArrowRight className="w-3 h-3" />
-            </button>
+            <WalletButton />
           </div>
 
         </div>
