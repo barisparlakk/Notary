@@ -22,49 +22,34 @@ import {
   Layers,
   ArrowUpRight
 } from 'lucide-react';
-import { 
-  calculateSha256Browser, 
-  formatSignedMessage, 
-  signMessageBrowser, 
-  notarizeDocument, 
-  verifyDocument 
-} from '../api';
-import { INITIAL_TEST_VECTOR } from '../mocks';
+import { useNotary, shortKey } from '../lib/notary';
+import { deriveProofPda, hexToBytes, sha256Hex, verifyDocument } from '../lib/chain';
+import { setMeta } from '../lib/localMeta';
 
-const SAMPLE_ORIGINAL_CONTENT = `ChainNotary Provenance Report v1.0
-Timestamp: 2026-10-03T18:30:00Z
+const makeContent = (nonce, tampered = false) => `Notary Provenance Report v2.0
+Run: ${nonce}
 Sender: agent_a (Research & Strategy)
 Receiver: agent_b (Execution & Treasury)
 Payload:
 {
   "action": "EXECUTE_PORTFOLIO_REBALANCE",
   "allocation_source": "0x4a9b...c38d",
-  "total_amount_usd": 150000.00,
-  "risk_score": 0.04,
-  "status": "APPROVED FOR EXECUTION"
-}`;
-
-const SAMPLE_TAMPERED_CONTENT = `ChainNotary Provenance Report v1.0
-Timestamp: 2026-10-03T18:30:00Z
-Sender: agent_a (Research & Strategy)
-Receiver: agent_b (Execution & Treasury)
-Payload:
-{
-  "action": "EXECUTE_PORTFOLIO_REBALANCE",
-  "allocation_source": "0x4a9b...c38d",
-  "total_amount_usd": 1500000.00,
-  "risk_score": 0.99,
-  "status": "REVOKED & EXPLOITED"
+  "total_amount_usd": ${tampered ? '1500000.00' : '150000.00'},
+  "risk_score": ${tampered ? '0.99' : '0.04'},
+  "status": "${tampered ? 'REVOKED & EXPLOITED' : 'APPROVED FOR EXECUTION'}"
 }`;
 
 export default function PipelineSimulator() {
+  const { chain, signer, isDemo, cluster } = useNotary();
   const [isRunning, setIsRunning] = useState(false);
+  const [apiOutage, setApiOutage] = useState(false);
+  const [runError, setRunError] = useState('');
+  const [content, setContent] = useState(() => makeContent('preview'));
+  const [pdaPreview, setPdaPreview] = useState('');
   const [currentStep, setCurrentStep] = useState(0);
   const [tamperedMode, setTamperedMode] = useState(false);
   
   const [docHash, setDocHash] = useState('');
-  const [signedMsg, setSignedMsg] = useState('');
-  const [signature, setSignature] = useState('');
   const [notarizeResult, setNotarizeResult] = useState(null);
   const [verifyResult, setVerifyResult] = useState(null);
   const [copiedField, setCopiedField] = useState('');
@@ -78,75 +63,67 @@ export default function PipelineSimulator() {
   const resetPipeline = () => {
     setCurrentStep(0);
     setDocHash('');
-    setSignedMsg('');
-    setSignature('');
+    setPdaPreview('');
+    setRunError('');
     setNotarizeResult(null);
     setVerifyResult(null);
     setIsRunning(false);
   };
 
   const runPipeline = async (simulateTamper = false) => {
+    if (!signer) {
+      setRunError('Connect a wallet (top right) to run the pipeline on devnet.');
+      return;
+    }
+    setRunError('');
     setIsRunning(true);
     setTamperedMode(simulateTamper);
     setVerifyResult(null);
+    setNotarizeResult(null);
     setCurrentStep(1);
 
-    const originalFile = new File([SAMPLE_ORIGINAL_CONTENT], "report.pdf", { type: "application/pdf" });
-    const timestamp = "2026-10-03T18:30:00Z";
-    const sender = "agent_a";
-    const receiver = "agent_b";
+    const nonce = new Date().toISOString();
+    const original = makeContent(nonce);
+    setContent(original);
+    try {
+      await new Promise(r => setTimeout(r, 450));
 
-    await new Promise(r => setTimeout(r, 450));
+      setCurrentStep(2);
+      const hash = await sha256Hex(original);
+      setDocHash(hash);
+      await new Promise(r => setTimeout(r, 450));
 
-    setCurrentStep(2);
-    const hash = await calculateSha256Browser(originalFile);
-    setDocHash(hash);
-    await new Promise(r => setTimeout(r, 450));
+      setCurrentStep(3);
+      setPdaPreview(deriveProofPda(chain.programId, signer.publicKey, hexToBytes(hash))[0].toBase58());
+      await new Promise(r => setTimeout(r, 500));
 
-    setCurrentStep(3);
-    const msg = formatSignedMessage(hash, sender, receiver, timestamp);
-    setSignedMsg(msg);
-    const seedA = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
-    const sig = signMessageBrowser(seedA, msg) || INITIAL_TEST_VECTOR.signature;
-    setSignature(sig);
-    await new Promise(r => setTimeout(r, 500));
+      setCurrentStep(4);
+      const out = await chain.notarize({ signer, hashHex: hash });
+      setMeta(out.proof_pda, { file_name: 'report.pdf', tx_signature: out.tx_signature });
+      setNotarizeResult(out);
+      await new Promise(r => setTimeout(r, 600));
 
-    setCurrentStep(4);
-    const res = await notarizeDocument({
-      file: originalFile,
-      sender,
-      receiver,
-      timestamp,
-      signature: sig
-    });
-    setNotarizeResult(res.data);
-    await new Promise(r => setTimeout(r, 600));
+      setCurrentStep(5);
+      await new Promise(r => setTimeout(r, 400));
 
-    setCurrentStep(5);
-    await new Promise(r => setTimeout(r, 400));
-
-    setCurrentStep(6);
-    const receivedFile = simulateTamper
-      ? new File([SAMPLE_TAMPERED_CONTENT], "report_tampered.pdf", { type: "application/pdf" })
-      : originalFile;
-
-    const verifyRes = await verifyDocument({
-      file: receivedFile,
-      proof_id: res.data.proof_id
-    });
-
-    setVerifyResult(verifyRes.data);
-    setCurrentStep(7);
-    setIsRunning(false);
+      setCurrentStep(6);
+      const receivedHash = await sha256Hex(simulateTamper ? makeContent(nonce, true) : original);
+      setVerifyResult(await verifyDocument(chain, receivedHash, { pda: out.proof_pda }));
+      setCurrentStep(7);
+    } catch (err) {
+      setRunError(String(err.message || err));
+    } finally {
+      setIsRunning(false);
+    }
   };
 
   const steps = [
     { num: 1, title: 'Artifact Created', desc: 'Agent A generates payload', icon: FileText },
     { num: 2, title: 'SHA-256 Digest', desc: 'Immutable 256-bit fingerprint', icon: Cpu },
-    { num: 3, title: 'Ed25519 Signed', desc: 'Sender cryptographic proof', icon: Key },
-    { num: 4, title: 'Solana Anchored', desc: 'Immutable devnet transaction', icon: Globe },
+    { num: 3, title: 'Wallet Signed', desc: 'Signer key proves origin', icon: Key },
+    { num: 4, title: 'PDA Anchored', desc: 'Proof account on Solana', icon: Globe },
     { num: 5, title: 'Peer Delivery', desc: 'Received by Agent B', icon: Layers },
-    { num: 6, title: 'Integrity Audit', desc: 'Hash & signature comparison', icon: ShieldCheck },
+    { num: 6, title: 'Integrity Audit', desc: 'Direct chain read, no API', icon: ShieldCheck },
     { num: 7, title: 'Consensus Verdict', desc: 'Mathematical verification', icon: CheckCircle2 },
   ];
 
@@ -164,7 +141,7 @@ export default function PipelineSimulator() {
             <div className="flex flex-wrap items-center gap-2">
               <div className="cal-pill text-gray-800 bg-gray-50 border-gray-200 hover:border-gray-300 transition-colors cursor-default">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                <span className="font-semibold">Solana Devnet Live</span>
+                <span className="font-semibold">{isDemo ? 'DEMO mode · not on-chain' : `Solana ${cluster === 'devnet' ? 'Devnet' : cluster} Live`}</span>
                 <span className="text-gray-400">›</span>
               </div>
               <div className="cal-pill bg-emerald-50 text-emerald-800 border-emerald-200/80">
@@ -180,7 +157,7 @@ export default function PipelineSimulator() {
 
             {/* Crisp Subtitle */}
             <p className="text-base sm:text-lg text-gray-600 max-w-xl leading-relaxed">
-              Autonomous agents execute billions in value. ChainNotary provides mathematical, sub-second cryptographic proof on the Solana blockchain for every agent-to-agent decision.
+              Autonomous agents execute billions in value. Notary stores a proof account on Solana for every decision and document, and anyone can verify it straight from the chain, even when our servers are down.
             </p>
 
             {/* Action Buttons */}
@@ -216,10 +193,19 @@ export default function PipelineSimulator() {
               )}
             </div>
 
+            {runError && (
+              <div className="cal-card p-3 border border-red-200 bg-red-50 text-xs text-red-800 font-mono break-all" role="alert">{runError}</div>
+            )}
+
+            <label className="inline-flex items-center space-x-2 text-xs text-gray-700 cursor-pointer select-none">
+              <input type="checkbox" checked={apiOutage} onChange={(e) => setApiOutage(e.target.checked)} className="accent-black" />
+              <span>Simulate our API being offline <span className="text-gray-400">(verification does not use it)</span></span>
+            </label>
+
             <div className="text-xs text-gray-500 font-medium flex items-center space-x-2">
-              <span>✓ No wallet setup required</span>
+              <span>✓ Verifies without our API</span>
               <span>•</span>
-              <span>✓ Deterministic Ed25519 & SHA-256</span>
+              <span>✓ Wallet-signed, chain-timestamped</span>
               <span>•</span>
               <span>✓ Sub-second finality</span>
             </div>
@@ -227,12 +213,12 @@ export default function PipelineSimulator() {
             {/* Social / Crypto Proof Badges */}
             <div className="pt-2 flex items-center space-x-6 border-t border-gray-100">
               <div className="flex items-center space-x-1.5 text-xs text-gray-500 font-mono">
-                <span className="font-bold text-gray-900">Solana Memo</span>
-                <span>na1|...</span>
+                <span className="font-bold text-gray-900">Solana PDA</span>
+                <span>proof account</span>
               </div>
               <div className="flex items-center space-x-1.5 text-xs text-gray-500 font-mono">
-                <span className="font-bold text-gray-900">PyNaCl</span>
-                <span>ed25519-base64</span>
+                <span className="font-bold text-gray-900">Ed25519</span>
+                <span>tx-signature</span>
               </div>
               <div className="flex items-center space-x-1.5 text-xs text-gray-500 font-mono">
                 <span className="font-bold text-gray-900">Digest</span>
@@ -369,9 +355,9 @@ export default function PipelineSimulator() {
               <span className="w-7 h-7 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center text-xs font-bold text-gray-900 font-mono">
                 02
               </span>
-              <h3 className="text-lg font-bold text-gray-900">Sign with Ed25519 Seed</h3>
+              <h3 className="text-lg font-bold text-gray-900">Sign with Your Wallet</h3>
               <p className="text-xs text-gray-600 leading-relaxed">
-                The canonical string <code className="text-gray-800 font-mono">notary:v1|...</code> is signed by the agent’s 32-byte secret key with zero network exposure.
+                The transaction is signed by the agent’s or your wallet key. The signature and the chain clock become part of the record, so nobody can back-date it.
               </p>
             </div>
 
@@ -382,7 +368,7 @@ export default function PipelineSimulator() {
                   <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                   <span className="font-bold text-gray-800">agent_a</span>
                 </div>
-                <span className="text-[10px] text-gray-400">Strategy Seed</span>
+                <span className="text-[10px] text-gray-400">Agent wallet</span>
                 <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[10px]">Ed25519</span>
               </div>
               <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-gray-200 shadow-xs">
@@ -390,7 +376,7 @@ export default function PipelineSimulator() {
                   <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                   <span className="font-bold text-gray-800">agent_b</span>
                 </div>
-                <span className="text-[10px] text-gray-400">Treasury Seed</span>
+                <span className="text-[10px] text-gray-400">Agent wallet</span>
                 <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[10px]">Ed25519</span>
               </div>
             </div>
@@ -404,7 +390,7 @@ export default function PipelineSimulator() {
               </span>
               <h3 className="text-lg font-bold text-gray-900">Anchor to Solana Devnet</h3>
               <p className="text-xs text-gray-600 leading-relaxed">
-                The cryptographic proof is permanently stamped onto Solana via SPL memo. Anyone with the file can verify its authenticity.
+                The proof lives in its own program-derived account (PDA) on Solana. Anyone with the file can derive the address and verify it, no account or API needed.
               </p>
             </div>
 
@@ -415,7 +401,7 @@ export default function PipelineSimulator() {
                 <span className="text-[11px] text-emerald-600 font-bold">Devnet Cluster</span>
               </div>
               <div className="p-2.5 rounded-lg bg-white border border-gray-200 text-[11px] text-gray-700 break-all select-all font-mono">
-                memo: na1|88a1b5c4...|agent_a|agent_b
+                PDA seeds: [proof, signer, sha256]
               </div>
               <div className="flex justify-between items-center text-[10px] text-gray-400 pt-1">
                 <span>Finality: ~400ms</span>
@@ -519,14 +505,7 @@ export default function PipelineSimulator() {
                   <div className="space-y-1">
                     <div className="text-gray-500 font-bold mb-1">// Attacker intercepted payload and multiplied total_amount by 10x:</div>
                     <pre className="text-gray-700 font-mono text-xs">
-{`ChainNotary Provenance Report v1.0
-Timestamp: 2026-10-03T18:30:00Z
-Sender: agent_a (Research & Strategy)
-Receiver: agent_b (Execution & Treasury)
-Payload:
-{
-  "action": "EXECUTE_PORTFOLIO_REBALANCE",
-  "allocation_source": "0x4a9b...c38d",`}
+{content.split('\n').slice(0, 7).join('\n')}
                     </pre>
                     <div className="p-1.5 bg-red-200/80 rounded border border-red-300 font-bold text-red-900">
                       {`  "total_amount_usd": 1500000.00,  <-- ⚠️ TAMPERED (Original was 150000.00)`}
@@ -539,7 +518,7 @@ Payload:
                   </div>
                 ) : (
                   <pre className="text-gray-800 font-mono text-xs">
-                    {SAMPLE_ORIGINAL_CONTENT}
+                    {content}
                   </pre>
                 )}
               </div>
@@ -556,7 +535,7 @@ Payload:
                     </span>
                   </div>
                   <span className="text-xs font-mono text-gray-500">
-                    Ed25519 (Base64) + SHA-256 (Hex)
+                    Ed25519 tx signature + SHA-256 (Hex)
                   </span>
                 </div>
 
@@ -577,24 +556,24 @@ Payload:
                     </div>
                   </div>
 
-                  {signedMsg && (
+                  {pdaPreview && (
                     <div>
                       <span className="text-[11px] text-gray-500 block mb-1">
-                        Canonical Signed Payload String:
+                        Proof Account (PDA) derived from [&quot;proof&quot;, signer, sha256]:
                       </span>
                       <div className="cal-hash-block text-gray-600 bg-white">
-                        {signedMsg}
+                        {pdaPreview}
                       </div>
                     </div>
                   )}
 
-                  {signature && (
+                  {signer && (
                     <div>
                       <span className="text-[11px] text-gray-500 block mb-1">
-                        Detached Ed25519 Signature (Signed with agent_a Seed):
+                        Signer ({signer.label}), signs the transaction:
                       </span>
                       <div className="cal-hash-block text-gray-700">
-                        {signature}
+                        {String(signer.publicKey)}
                       </div>
                     </div>
                   )}
@@ -618,18 +597,18 @@ Payload:
                     </span>
                   </div>
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Confirmed on Devnet
+                    {isDemo ? 'Demo record' : 'Confirmed on Solana'}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-xs font-mono">
                   <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
-                    <span className="text-gray-500 block text-[10px]">Proof ID</span>
-                    <span className="text-gray-900 font-bold text-xs">{notarizeResult.proof_id}</span>
+                    <span className="text-gray-500 block text-[10px]">Proof account (PDA)</span>
+                    <span className="text-gray-900 font-bold text-xs" title={notarizeResult.proof_pda}>{shortKey(notarizeResult.proof_pda, 6)}</span>
                   </div>
                   <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
-                    <span className="text-gray-500 block text-[10px]">Route</span>
-                    <span className="text-gray-900 font-bold text-xs">{notarizeResult.sender} ➔ {notarizeResult.receiver}</span>
+                    <span className="text-gray-500 block text-[10px]">Chain time (UTC)</span>
+                    <span className="text-gray-900 font-bold text-xs">{notarizeResult.proof.created_at_iso}</span>
                   </div>
                 </div>
 
@@ -640,17 +619,19 @@ Payload:
                   </div>
                 </div>
 
-                <div className="pt-1">
-                  <a
-                    href={notarizeResult.explorer_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="cal-btn-secondary w-full py-2 text-xs rounded-lg flex items-center justify-center space-x-1.5"
-                  >
-                    <span>Inspect on Solana Explorer</span>
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                  </a>
-                </div>
+                {!isDemo && (
+                  <div className="pt-1">
+                    <a
+                      href={`https://explorer.solana.com/address/${notarizeResult.proof_pda}?cluster=${cluster}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="cal-btn-secondary w-full py-2 text-xs rounded-lg flex items-center justify-center space-x-1.5"
+                    >
+                      <span>Inspect on Solana Explorer</span>
+                      <ArrowUpRight className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                )}
               </div>
             )}
 
@@ -682,7 +663,7 @@ Payload:
                     </h3>
                     <p className="text-xs text-gray-600 mt-1 leading-relaxed">
                       {verifyResult.status === 'VERIFIED'
-                        ? 'The received document matches the sender agent\'s notarized artifact bit-for-bit.'
+                        ? 'The received document matches the notarized artifact bit-for-bit, read straight from the chain' + (apiOutage ? ' while our API was offline.' : '.')
                         : 'Cryptographic fingerprint mismatch. Content was modified in transit after notarization.'}
                     </p>
                   </div>
