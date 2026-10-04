@@ -21,6 +21,7 @@ import {
 import { useNotary, shortKey } from '../lib/notary';
 import { buildCertificate, deriveProofPda, hexToBytes, sha256Hex, MAX_PARENTS } from '../lib/chain';
 import { getMeta, setMeta } from '../lib/localMeta';
+import { API_URL } from '../lib/config';
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -39,6 +40,7 @@ export default function NotarizeStudio({ onProofCreated }) {
   const [qr, setQr] = useState('');
   const [copiedField, setCopiedField] = useState('');
   const [balance, setBalance] = useState(null);
+  const [useRelay, setUseRelay] = useState(!!API_URL);
 
   const handleFileChange = async (selectedFile) => {
     if (!selectedFile) return;
@@ -111,7 +113,7 @@ export default function NotarizeStudio({ onProofCreated }) {
     setError('');
     try {
       const out = await chain.notarize({
-        signer, hashHex: docHash, receiver: receiver || null, parents,
+        signer, hashHex: docHash, receiver: receiver || null, parents, relay: useRelay && API_URL ? API_URL : null,
       });
       const certificate = buildCertificate({
         proofPda: out.proof_pda, proof: out.proof, txSignature: out.tx_signature, programId, cluster,
@@ -328,7 +330,7 @@ export default function NotarizeStudio({ onProofCreated }) {
               <span className="text-xs font-mono font-bold text-gray-400 uppercase">Step 03</span>
               <h3 className="text-base font-bold text-gray-950 font-sans">Wallet Signature &amp; Proof Account</h3>
             </div>
-            {!isDemo && lowBalance && cluster === 'devnet' && (
+            {!isDemo && lowBalance && cluster === 'devnet' && !useRelay && (
               <button
                 type="button"
                 onClick={handleAirdrop}
@@ -339,6 +341,13 @@ export default function NotarizeStudio({ onProofCreated }) {
               </button>
             )}
           </div>
+
+          {!isDemo && API_URL && (
+            <label className="flex items-center space-x-2 text-xs text-gray-700 cursor-pointer select-none">
+              <input type="checkbox" checked={useRelay} onChange={(e) => setUseRelay(e.target.checked)} className="accent-black" />
+              <span>Let the Notary relayer pay the network fee <span className="text-gray-400">(you still sign; no SOL needed)</span></span>
+            </label>
+          )}
 
           <div className="p-3.5 rounded-xl bg-gray-50 text-xs font-mono border border-gray-200 space-y-1">
             <span className="text-gray-500 font-bold block text-[11px]">Proof account (PDA) that will hold this record:</span>

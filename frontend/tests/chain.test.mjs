@@ -80,3 +80,41 @@ test('sertifika alanları', () => {
   assert.equal(c.explorer_url, `https://explorer.solana.com/address/${V.proof_pda}?cluster=devnet`);
   assert.equal(c.created_at, '2026-10-03T18:30:00Z');
 });
+
+
+test('relay yolu: ücret ödeyen relayer, signer imzalı, backend\'e doğru gövde gider', async () => {
+  const { Transaction, Keypair: Kp } = await import('@solana/web3.js');
+  const relayer = Kp.generate();
+  const signer = Kp.generate();
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, init });
+    if (url.endsWith('/relay/info')) return { ok: true, json: async () => ({ enabled: true, relayer_pubkey: relayer.publicKey.toBase58() }) };
+    return { ok: true, json: async () => ({ tx_signature: 'SIG', proof_pda: 'x' }) };
+  };
+  const connection = {
+    getLatestBlockhash: async () => ({ blockhash: '11111111111111111111111111111111' }),
+    getAccountInfo: async () => null,
+  };
+  const rpc = new chain.RpcChain(connection, V.program_id);
+  const h = await chain.sha256Hex('relay doc');
+  const out = await rpc.notarize({ signer: { publicKey: signer.publicKey, keypair: signer }, hashHex: h, relay: 'https://api.test' });
+  assert.equal(out.relayed, true);
+  assert.equal(out.tx_signature, 'SIG');
+  const body = JSON.parse(calls[1].init.body);
+  const tx = Transaction.from(Buffer.from(body.tx_base64, 'base64'));
+  assert.equal(tx.feePayer.toBase58(), relayer.publicKey.toBase58());
+  assert.equal(tx.instructions.length, 1);
+  const keys = tx.instructions[0].keys;
+  assert.equal(keys[0].pubkey.toBase58(), signer.publicKey.toBase58());   // signer
+  assert.equal(keys[1].pubkey.toBase58(), relayer.publicKey.toBase58());  // payer = relayer
+  assert.ok(tx.signatures.find((s) => s.publicKey.equals(signer.publicKey)).signature, 'signer imzası var');
+  assert.equal(tx.signatures.find((s) => s.publicKey.equals(relayer.publicKey)).signature, null, 'relayer imzası backend ekler');
+  assert.ok(tx.instructions[0].data.subarray(0, 8).equals(chain.NOTARIZE_DISC));
+});
+
+test('relay kapalıysa anlaşılır hata', async () => {
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ enabled: false }) });
+  const rpc = new chain.RpcChain({}, V.program_id);
+  await assert.rejects(rpc.notarize({ signer: chain.newDemoSigner(), hashHex: 'ab'.repeat(32), relay: 'https://api.test' }), /not configured/);
+});

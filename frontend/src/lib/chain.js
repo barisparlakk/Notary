@@ -195,14 +195,37 @@ export class RpcChain {
 
   /**
    * @param signer  { publicKey, signTransaction?(tx), keypair? } — cüzdan (wallet-adapter) ya da Keypair
-   * @param payer   opsiyonel ikinci imzacı (relayer akışı için ayrı); verilmezse signer öder
+   * @param relay   opsiyonel backend adresi: verilirse ücreti relayer öder (kullanıcının SOL'ü gerekmez)
    */
-  async notarize({ signer, hashHex, receiver = null, parents = [] }) {
+  async notarize({ signer, hashHex, receiver = null, parents = [], relay = null }) {
     const documentHash = hexToBytes(hashHex);
     const signerKey = pk(signer.publicKey);
+    const parentBytes = parents.map(hexToBytes);
+    const [proofPda] = deriveProofPda(this.programId, signerKey, documentHash);
+
+    if (relay) {
+      const info = await (await fetch(`${relay}/relay/info`)).json();
+      if (!info.enabled) throw new ChainError('Relayer is not configured on this server');
+      const relayerKey = new PublicKey(info.relayer_pubkey);
+      const ix = buildNotarizeInstruction({
+        programId: this.programId, signer: signerKey, payer: relayerKey, documentHash, receiver, parents: parentBytes,
+      });
+      const { blockhash } = await this.connection.getLatestBlockhash();
+      const tx = new Transaction({ feePayer: relayerKey, recentBlockhash: blockhash }).add(ix);
+      let partial;
+      if (signer.keypair) { tx.partialSign(signer.keypair); partial = tx; } else { partial = await signer.signTransaction(tx); }
+      const res = await fetch(`${relay}/relay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tx_base64: partial.serialize({ requireAllSignatures: false }).toString('base64') }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new ChainError(body.detail || `relay failed (HTTP ${res.status})`);
+      return { proof_pda: proofPda.toBase58(), tx_signature: body.tx_signature, proof: await this.getProof(proofPda), relayed: true };
+    }
+
     const ix = buildNotarizeInstruction({
-      programId: this.programId, signer: signerKey, payer: signerKey, documentHash, receiver,
-      parents: parents.map(hexToBytes),
+      programId: this.programId, signer: signerKey, payer: signerKey, documentHash, receiver, parents: parentBytes,
     });
     const { blockhash } = await this.connection.getLatestBlockhash();
     const tx = new Transaction({ feePayer: signerKey, recentBlockhash: blockhash }).add(ix);
@@ -215,9 +238,7 @@ export class RpcChain {
       signature = await this.connection.sendRawTransaction(signed.serialize());
     }
     await this._confirm(signature);
-    const [proofPda] = deriveProofPda(this.programId, signerKey, documentHash);
-    const proof = await this.getProof(proofPda);
-    return { proof_pda: proofPda.toBase58(), tx_signature: signature, proof };
+    return { proof_pda: proofPda.toBase58(), tx_signature: signature, proof: await this.getProof(proofPda) };
   }
 }
 
@@ -249,7 +270,7 @@ export class MockChain {
       .map(([k, v]) => ({ ...v.proof, proof_pda: k, tx_signature: v.tx_signature }));
   }
 
-  async notarize({ signer, hashHex, receiver = null, parents = [] }) {
+  async notarize({ signer, hashHex, receiver = null, parents = [] /* relay yok sayılır */ }) {
     if (parents.length > MAX_PARENTS) throw new ChainError(`en fazla ${MAX_PARENTS} üst belge`);
     if (new Set(parents).size !== parents.length) throw new ChainError('DuplicateParent');
     const documentHash = hexToBytes(hashHex);
