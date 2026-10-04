@@ -1,0 +1,19 @@
+{
+  "note": "Test program ID yaln\u0131zca vekt\u00f6r i\u00e7indir; ger\u00e7ek deploy sonras\u0131 PROGRAM_ID ile yeniden \u00fcretilir.",
+  "signer_seed_hex": "4242424242424242424242424242424242424242424242424242424242424242",
+  "signer": "3F5qRPtKg8GhGNnbd3qCj6nVJxWsGxq7pvH84okYLAqf",
+  "program_id": "GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB",
+  "file_content_ascii": "Notary Test Vector Document v1",
+  "document_hash": "055e95ec4e2aa4543afa1569901d08fff259d0deb8e81cea80b434b4aa601d27",
+  "proof_pda": "BQmtqeNo2zJmpAKyj9b1ddGgMLPwMDaX62JHCH9e3fV2",
+  "bump": 252,
+  "receiver": "3MZskhKUdNRkeMQ6zyNVSJcCx38o79ohwmSgZ2d5a4cu",
+  "parent_document_hash": "fcf3f331b51fb86fcebd63317dd685ffd8a97a2e44c05104e241a40e0835bb6d",
+  "notarize_discriminator_hex": "e95e35ee426e4a32",
+  "proof_account_discriminator_hex": "a3230d470f803f52",
+  "account_size_max_parents": 247,
+  "memcmp_offsets": {
+    "signer": 9,
+    "document_hash": 41
+  }
+}
