@@ -16,9 +16,7 @@ export default function App() {
       {/* Main Content Area */}
       <main id="main-content" className="flex-1 w-full max-w-page mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'pipeline' && <PipelineSimulator />}
-        {activeTab === 'notarize' && (
-          <NotarizeStudio onProofCreated={() => setActiveTab('ledger')} />
-        )}
+        {activeTab === 'notarize' && <NotarizeStudio />}
         {activeTab === 'verify' && <VerificationTerminal />}
         {activeTab === 'ledger' && <LedgerExplorer />}
       </main>
