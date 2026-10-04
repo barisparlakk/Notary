@@ -92,6 +92,8 @@ Hesap 247 bayt ayrılır (n = 4 ve receiver = Some için); kullanılmayan kuyruk
 - `GET /proofs/{proof_pda}`: çözümlenmiş hesap (kolaylık).
 - `GET /proofs?signer=<pubkey>`: indeksli geçmiş.
 - `POST /certificate`: gövde `{proof_pda}` → PDF.
+- `GET /relay/info`: `{enabled, program_id, relayer_pubkey, cluster}`. İstemci işlemi `fee payer = relayer_pubkey`, `payer hesabı = relayer_pubkey`, `signer = kendi cüzdanı` ile kurar, signer imzalar, `/relay`'e gönderir.
+- Relayer yalnızca tek `notarize` talimatlı işlemleri imzalar; `signer` relayer olamaz (relayer adına sahte kayıt engeli).
 - v1 uç noktaları (`/agents/register`, `/notarize`, `/verify`, `/proofs/{proof_id}`) göç bitene kadar çalışır, sonra kaldırılır.
 
 ## 8. Test vektörü v2 (üç dilde aynı çıkmalı: Python, TypeScript, Rust)
