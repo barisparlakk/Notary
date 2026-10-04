@@ -8,13 +8,16 @@ Rust 1.99, Solana/Agave CLI 4.3.0 (`cargo build-sbf`), `anchor-lang = 1.2.0`. An
 
 ## Derleme
 ```bash
-cd program/programs/notary && cargo build-sbf      # -> program/target/deploy/notary.so
+cd program/programs/notary && cargo build-sbf --arch v3   # -> program/target/deploy/notary.so
 ```
+
+> `--arch v3` gerekli: Agave 4.3, SIMD-0500 ile v0-v2 dağıtımını reddeder. Devnet'te SBPF v3 etkin (slot 461808000).
 
 ## Test
 Birim testleri yerine gerçek runtime'a karşı uçtan uca sınama kullanılır:
 ```bash
-solana-test-validator --reset --bpf-program <PROGRAM_ID> program/target/deploy/notary.so &
+solana-test-validator --reset &
+solana program deploy program/target/deploy/notary.so --program-id ~/.config/notary/program-keypair.json --keypair <fonlu-anahtar.json> --url http://127.0.0.1:8899
 cd agents   && python demo_v2.py --rpc http://127.0.0.1:8899 --program <PROGRAM_ID>
 cd frontend && RPC_URL=http://127.0.0.1:8899 PROGRAM_ID=<PROGRAM_ID> npm run e2e:local
 ```

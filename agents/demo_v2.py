@@ -45,6 +45,7 @@ def main():
     ap.add_argument("--mock", action="store_true", help="sahte RPC başlat")
     ap.add_argument("--rpc", default=None)
     ap.add_argument("--program", default=None)
+    ap.add_argument("--funder", default=None, help="fon cüzdanı (Solana CLI JSON); airdrop yerine SOL aktarır")
     ap.add_argument("--delay", type=float, default=0.5)
     a = ap.parse_args()
 
@@ -69,7 +70,10 @@ def main():
         a_kp, b_kp = onchain.agent_keypair("agent_a"), onchain.agent_keypair("agent_b")
         for name, k in (("agent_a", a_kp), ("agent_b", b_kp)):
             if a.mock or rpc.balance(k.pubkey()) < 5_000_000:
-                rpc.airdrop(k.pubkey(), 1)
+                if a.funder:
+                    onchain.fund_from(rpc, onchain.load_keypair(a.funder), k.pubkey(), 20_000_000)
+                else:
+                    rpc.airdrop(k.pubkey(), 1)
             console.print(f"  {name} → {k.pubkey()}")
 
         step(2, "agent_a: rapor üret, hash'i zincire kaydet", a.delay)

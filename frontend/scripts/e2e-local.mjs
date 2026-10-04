@@ -1,9 +1,10 @@
 // Gerçek bir Solana doğrulayıcısına (solana-test-validator ya da devnet) karşı uçtan uca sınama.
 //   RPC_URL=http://127.0.0.1:8899 PROGRAM_ID=<id> [RELAY_URL=http://127.0.0.1:8000] node scripts/e2e-local.mjs
-import { Connection, Keypair } from '@solana/web3.js';
+import { Connection, Keypair, SystemProgram, Transaction } from '@solana/web3.js';
+import { readFileSync } from 'node:fs';
 import * as chain from '../src/lib/chain.js';
 
-const { RPC_URL = 'http://127.0.0.1:8899', PROGRAM_ID, RELAY_URL } = process.env;
+const { RPC_URL = 'http://127.0.0.1:8899', PROGRAM_ID, RELAY_URL, FUNDER } = process.env; // FUNDER: Solana CLI JSON anahtarı (airdrop yerine transfer)
 if (!PROGRAM_ID) { console.error('PROGRAM_ID gerekli'); process.exit(2); }
 
 const conn = new Connection(RPC_URL, 'confirmed');
@@ -12,6 +13,20 @@ let failed = 0;
 const check = (name, ok, extra = '') => { console.log(`${ok ? '✔' : '✖'} ${name} ${extra}`); if (!ok) failed++; };
 
 const fund = async (kp) => {
+  if (FUNDER) {
+    const funder = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(FUNDER, 'utf8'))));
+    const { blockhash } = await conn.getLatestBlockhash();
+    const tx = new Transaction({ feePayer: funder.publicKey, recentBlockhash: blockhash })
+      .add(SystemProgram.transfer({ fromPubkey: funder.publicKey, toPubkey: kp.publicKey, lamports: 20_000_000 }));
+    tx.sign(funder);
+    const sig = await conn.sendRawTransaction(tx.serialize());
+    for (let i = 0; i < 60; i++) {
+      const { value } = await conn.getSignatureStatuses([sig]);
+      if (value[0]?.confirmationStatus) return;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    return;
+  }
   const sig = await conn.requestAirdrop(kp.publicKey, 1e9);
   for (let i = 0; i < 40; i++) {
     const { value } = await conn.getSignatureStatuses([sig]);

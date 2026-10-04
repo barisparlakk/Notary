@@ -16,6 +16,7 @@ from solders.keypair import Keypair
 from solders.message import Message
 from solders.pubkey import Pubkey
 from solders.system_program import ID as SYSTEM_PROGRAM_ID
+from solders.system_program import TransferParams, transfer as system_transfer
 from solders.transaction import Transaction
 
 RPC_URL = os.environ.get("SOLANA_RPC_URL", "https://api.devnet.solana.com")
@@ -197,6 +198,16 @@ def notarize(rpc, signer: Keypair, document_hash: bytes, receiver=None, parents=
     sig = rpc.send(Transaction(keypairs, msg, blockhash))
     rpc.confirm(sig)
     return {"proof_pda": str(pda), "tx_signature": sig, "signer": str(signer.pubkey()), "document_hash": document_hash.hex()}
+
+
+def fund_from(rpc, funder: Keypair, to, lamports: int):
+    """Faucet yerine bir fon cüzdanından SOL aktarır (devnet airdrop hız sınırına takılınca)."""
+    ix = system_transfer(TransferParams(from_pubkey=funder.pubkey(), to_pubkey=Pubkey.from_string(str(to)), lamports=lamports))
+    blockhash = rpc.latest_blockhash()
+    msg = Message.new_with_blockhash([ix], funder.pubkey(), blockhash)
+    sig = rpc.send(Transaction([funder], msg, blockhash))
+    rpc.confirm(sig)
+    return sig
 
 
 def get_proof(rpc, pda):
