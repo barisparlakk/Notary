@@ -26,19 +26,21 @@
 - Seeds: `[b"proof", signer_pubkey (32), document_hash (32)]`
 - Alanlar (Borsh, bu sırayla):
 
-| Alan | Tür | Ofset* |
+| Alan | Tür | Ofset |
 |---|---|---|
 | (Anchor discriminator) | 8 bayt = sha256("account:Proof")[..8] = `a3230d470f803f52` | 0 |
 | version | u8 (= 1) | 8 |
 | signer | Pubkey | 9 |
 | document_hash | [u8; 32] | 41 |
-| receiver | Option<Pubkey> (1 + 32) | 73 |
-| created_at | i64 | 106 |
-| parents | Vec<[u8; 32]> (4 + 32·n), **n ≤ 4** | 114 |
-| bump | u8 | 118 + 32·n |
+| receiver | Option<Pubkey>: `None` = 1 bayt (0x00), `Some` = 1 + 32 bayt | 73 |
+| created_at | i64 | 74 (None) / 106 (Some) |
+| parents | Vec<[u8; 32]>: u32 uzunluk + 32·n bayt, **n ≤ 4** | created_at + 8 |
+| bump | u8 | parents'ın hemen sonrası |
 
-\* `parents` boşken. `getProgramAccounts` memcmp süzgeçleri: signer için ofset 9, document_hash için ofset 41.
-Ayrılan boyut: 247 bayt (n = 4 için).
+Borsh değişken uzunlukludur: `receiver` ve `parents` yüzünden `created_at` ve sonraki alanların ofseti kayar,
+bu yüzden hesap **sırayla çözümlenir**. Sabit ofsetler yalnızca `getProgramAccounts` memcmp süzgeçleri içindir:
+`signer` için **9**, `document_hash` için **41**.
+Hesap 247 bayt ayrılır (n = 4 ve receiver = Some için); kullanılmayan kuyruk baytları sıfırdır ve yok sayılır.
 
 ### Talimat: `notarize(document_hash: [u8;32], receiver: Option<Pubkey>, parents: Vec<[u8;32]>)`
 - Discriminator: sha256("global:notarize")[..8] = `e95e35ee426e4a32`
