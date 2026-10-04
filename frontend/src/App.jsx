@@ -31,20 +31,20 @@ export default function App() {
         <div className="max-w-page mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-gray-600 font-mono">
-              <span className="font-bold text-gray-950 font-sans">ChainNotary Protocol</span>
+              <span className="font-bold text-gray-950 font-sans">Notary Protocol</span>
               <span className="text-gray-300">/</span>
               <span>SHA-256 Hex</span>
               <span className="text-gray-300">/</span>
-              <span>Ed25519 Base64</span>
+              <span>Ed25519 Tx Signature</span>
               <span className="text-gray-300">/</span>
-              <span>Solana Devnet Memo</span>
+              <span>Solana PDA Proof</span>
               <span className="text-gray-300">/</span>
-              <span>ISO 8601 UTC</span>
+              <span>Chain Time (UTC)</span>
             </div>
 
             <div className="text-gray-500 font-mono text-[11px] flex items-center space-x-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-              <span>Stack: FastAPI • React • PyNaCl • Solana Devnet</span>
+              <span>Stack: Anchor • Solana • React • Python agents</span>
             </div>
           </div>
         </div>
