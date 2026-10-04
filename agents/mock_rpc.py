@@ -72,8 +72,20 @@ class MockChain:
         raw += struct.pack("<q", int(time.time())) + struct.pack("<I", n) + b"".join(parents) + bytes([bump])
         self.accounts[str(proof)] = raw + b"\x00" * (SPACE - len(raw))
 
+    def _account_json(self, raw):
+        """Gerçek Solana RPC'nin hesap nesnesindeki tüm alanlar (web3.js şema doğrulaması bunları ister)."""
+        return {"lamports": 2_000_000, "owner": str(self.program_id), "executable": False, "rentEpoch": 0,
+                "space": len(raw), "data": [base64.b64encode(raw).decode(), "base64"]}
+
     # --- JSON-RPC
     def handle(self, method, params):
+        result = self._handle(method, params)
+        # Gerçek RPC, "value" taşıyan yanıtlara context.slot ekler; web3.js bunu şema olarak zorunlu tutar.
+        if isinstance(result, dict) and "value" in result and "context" not in result:
+            result = {"context": {"slot": 1}, **result}
+        return result
+
+    def _handle(self, method, params):
         with self.lock:
             if method == "getLatestBlockhash":
                 return {"value": {"blockhash": str(Hash.new_unique()), "lastValidBlockHeight": 1}}
@@ -88,23 +100,22 @@ class MockChain:
                 return sig
             if method == "getSignatureStatuses":
                 return {"value": [
-                    {"err": self.statuses[s], "confirmationStatus": "confirmed"} if s in self.statuses else None
+                    {"slot": 1, "confirmations": None, "err": self.statuses[s], "status": {"Ok": None}, "confirmationStatus": "confirmed"}
+                    if s in self.statuses else None
                     for s in params[0]
                 ]}
             if method == "getAccountInfo":
                 raw = self.accounts.get(params[0])
                 if raw is None:
                     return {"value": None}
-                return {"value": {"owner": str(self.program_id), "lamports": 2_000_000, "executable": False,
-                                  "data": [base64.b64encode(raw).decode(), "base64"]}}
+                return {"value": self._account_json(raw)}
             if method == "getProgramAccounts":
                 if params[0] != str(self.program_id):
                     return []
                 out = []
                 for pk, raw in self.accounts.items():
                     if all(self._memcmp(raw, f["memcmp"]) for f in params[1].get("filters", [])):
-                        out.append({"pubkey": pk, "account": {"owner": str(self.program_id), "lamports": 2_000_000,
-                                                              "data": [base64.b64encode(raw).decode(), "base64"]}})
+                        out.append({"pubkey": pk, "account": self._account_json(raw)})
                 return out
             if method == "requestAirdrop":
                 self.balances[params[0]] = self.balances.get(params[0], 0) + params[1]

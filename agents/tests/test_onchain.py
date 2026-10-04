@@ -170,3 +170,16 @@ def test_demo_v2_mock_passes(monkeypatch):
 
     monkeypatch.setattr("sys.argv", ["demo_v2.py", "--mock", "--delay", "0"])
     assert demo_v2.main() == 0
+
+
+def test_golden_vectors_decode_and_encode():
+    g = V["golden"]
+    h = bytes.fromhex(V["document_hash"])
+    parent = bytes.fromhex(V["parent_document_hash"])
+    assert onchain.encode_notarize_data(h, V["receiver"], [parent]).hex() == g["notarize_data_receiver_one_parent_hex"]
+    assert onchain.encode_notarize_data(h, None, []).hex() == g["notarize_data_no_receiver_no_parents_hex"]
+    full = onchain.decode_proof(bytes.fromhex(g["proof_account_receiver_one_parent_hex"]))
+    assert (full["receiver"], full["parents"], full["created_at"], full["created_at_iso"], full["bump"]) == (
+        V["receiver"], [V["parent_document_hash"]], g["created_at_unix"], g["created_at_iso"], V["bump"])
+    bare = onchain.decode_proof(bytes.fromhex(g["proof_account_no_receiver_no_parents_hex"]))
+    assert (bare["receiver"], bare["parents"], bare["created_at"], bare["bump"]) == (None, [], g["created_at_unix"], V["bump"])
