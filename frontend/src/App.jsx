@@ -6,7 +6,12 @@ import VerificationTerminal from './components/VerificationTerminal';
 import LedgerExplorer from './components/LedgerExplorer';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('pipeline');
+  // Doğrulama bağlantıları (QR/sertifika): /?tab=verify&pda=<proof_pda>
+  const params = new URLSearchParams(window.location.search);
+  const initialPda = params.get('pda') || '';
+  const [activeTab, setActiveTab] = useState(
+    ['pipeline', 'notarize', 'verify', 'ledger'].includes(params.get('tab')) ? params.get('tab') : initialPda ? 'verify' : 'pipeline'
+  );
 
   return (
     <div className="min-h-screen bg-[#fafafa] text-gray-900 flex flex-col antialiased font-sans selection:bg-black selection:text-white">
@@ -17,7 +22,7 @@ export default function App() {
       <main id="main-content" className="flex-1 w-full max-w-page mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'pipeline' && <PipelineSimulator />}
         {activeTab === 'notarize' && <NotarizeStudio />}
-        {activeTab === 'verify' && <VerificationTerminal />}
+        {activeTab === 'verify' && <VerificationTerminal initialPda={initialPda} />}
         {activeTab === 'ledger' && <LedgerExplorer />}
       </main>
 
