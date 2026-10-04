@@ -1,0 +1,10 @@
+{
+  "cluster": "devnet",
+  "program_id": "7HCpWChK9pXXAsUzAvA8zq3pi6EwuaUJnkk8XqMn1swN",
+  "upgrade_authority": "2L7nCSdxDfzxPqu39FbTXbJoXzLqotzAaaUmAQHBFKSU",
+  "rpc": "https://api.devnet.solana.com",
+  "so_sha256": "6af9958ce6b9cf45bb82a0dccebebd20df7e08e83aba3776a2e1f7212d426e28",
+  "toolchain": "agave 4.3.0, anchor-lang 1.2.0",
+  "deployed_at": "2026-10-04T18:45:48Z",
+  "explorer_url": "https://explorer.solana.com/address/7HCpWChK9pXXAsUzAvA8zq3pi6EwuaUJnkk8XqMn1swN?cluster=devnet"
+}

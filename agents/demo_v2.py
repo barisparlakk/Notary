@@ -99,7 +99,8 @@ def main():
         ok2 = panel(onchain.verify(rpc, bad.read_bytes(), pda=cert["proof_pda"], program_id=program), bad.name, "INVALID")
 
         step(5, "Zincir provenance: Research → Analysis → Decision (parents zincirde)", a.delay)
-        docs = {r: onchain.sha256_bytes(f"{r} document".encode()) for r in ("research", "analysis", "decision")}
+        run_id = time.strftime("%Y%m%dT%H%M%S")  # aynı (imzalayan, hash) ikinci kez kaydedilemez: her çalıştırma benzersiz
+        docs = {r: onchain.sha256_bytes(f"{r} document {run_id}".encode()) for r in ("research", "analysis", "decision")}
         onchain.notarize(rpc, a_kp, docs["research"], program_id=program)
         onchain.notarize(rpc, b_kp, docs["analysis"], parents=[docs["research"]], program_id=program)
         dec = onchain.notarize(rpc, a_kp, docs["decision"], parents=[docs["analysis"]], program_id=program)

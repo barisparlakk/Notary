@@ -123,9 +123,15 @@ class Rpc:
         self.url, self.timeout = url or RPC_URL, timeout
 
     def call(self, method, params=None):
-        resp = requests.post(
-            self.url, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params or []}, timeout=self.timeout
-        )
+        # Genel RPC'ler (api.devnet.solana.com) hızlı sorguda 429 döner: üstel geri çekilmeyle yeniden dene.
+        for attempt in range(7):
+            resp = requests.post(
+                self.url, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params or []}, timeout=self.timeout
+            )
+            if resp.status_code in (429, 502, 503, 504) and attempt < 6:
+                time.sleep(min(2 ** attempt, 20) * 0.5)
+                continue
+            break
         resp.raise_for_status()
         body = resp.json()
         if "error" in body:
@@ -161,7 +167,7 @@ class Rpc:
                 raise ChainError(f"işlem başarısız: {st['err']}")
             if st and st.get("confirmationStatus") in ("confirmed", "finalized"):
                 return
-            time.sleep(0.5)
+            time.sleep(1.0)
         raise ChainError("işlem onaylanmadı (zaman aşımı)")
 
     def airdrop(self, pubkey, sol=1.0):
