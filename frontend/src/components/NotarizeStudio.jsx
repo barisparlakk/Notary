@@ -124,7 +124,12 @@ export default function NotarizeStudio({ onProofCreated }) {
       setQr(await QRCode.toDataURL(certificate.verify_url, { margin: 1, width: 160 }));
       if (onProofCreated) onProofCreated(res);
     } catch (err) {
-      setError(String(err.message || err));
+      const msg = String(err.message || err);
+      // Cüzdan yanlış ağdaysa (örn. mainnet) simülasyon/blockhash hataları görülür; sebebi kullanıcıya söyle.
+      const networkHint = signer?.kind === 'wallet' && /blockhash|simulat|network|cluster/i.test(msg)
+        ? ` Check that your wallet is set to Solana ${cluster === 'devnet' ? 'Devnet' : cluster}.`
+        : '';
+      setError(msg + networkHint);
     } finally {
       setIsSubmitting(false);
     }
@@ -341,6 +346,13 @@ export default function NotarizeStudio({ onProofCreated }) {
               </button>
             )}
           </div>
+
+          {!isDemo && signer?.kind === 'wallet' && (
+            <div className="text-[11px] font-mono text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+              Wallet extensions do not tell websites which network they are on. Make sure {signer.label} is set to Solana {cluster === 'devnet' ? 'Devnet' : cluster}
+              {cluster === 'devnet' ? ' (Phantom: Settings, Developer Settings, Testnet Mode).' : '.'}
+            </div>
+          )}
 
           {!isDemo && API_URL && (
             <label className="flex items-center space-x-2 text-xs text-gray-700 cursor-pointer select-none">
