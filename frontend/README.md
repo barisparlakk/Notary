@@ -12,5 +12,5 @@ npm run build
 
 - **DEMO modu:** program ID yokken tarayıcı içi sahte zincir ve geçici bir demo anahtarı kullanılır.
 - **Gerçek mod:** `VITE_PROGRAM_ID` + cüzdan (Phantom/Solflare). Aynı belge aynı imzalayanla ikinci kez kaydedilemez.
-- Sekmeler: Protocol Pipeline, Notarize Studio, Verification Terminal, Ledger & Registry.
+- Sekmeler: Check (ana sayfa), Record, Records. Eski bağlantılar (`?tab=verify`, `?tab=ledger` ...) çalışmaya devam eder.
 - Doğrulama bağlantısı / QR biçimi: `/?tab=verify&pda=<proof_pda>`.
