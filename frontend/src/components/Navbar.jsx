@@ -54,7 +54,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
               <span className="font-bold text-lg tracking-tight text-gray-950 font-sans">
                 Notary
               </span>
-              <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">
+              <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">
                 v2.0
               </span>
             </div>

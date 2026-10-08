@@ -55,7 +55,7 @@ export default function Dialog({ title, onClose, children, className = '' }) {
       >
         <div className="flex items-center justify-between pb-3 border-b border-gray-100">
           <span id={titleId} className="text-sm font-bold text-gray-900 font-sans">{title}</span>
-          <button onClick={() => closeRef.current()} className="text-gray-400 hover:text-gray-900 cursor-pointer p-1" aria-label="Close">
+          <button onClick={() => closeRef.current()} className="text-gray-500 hover:text-gray-900 cursor-pointer p-1" aria-label="Close">
             <X className="w-4 h-4" />
           </button>
         </div>

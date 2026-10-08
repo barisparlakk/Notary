@@ -169,7 +169,7 @@ export default function NotarizeStudio({ onProofCreated }) {
           <span className="cal-pill bg-gray-100 text-gray-800 font-mono text-xs">
             SIGNER INTERFACE
           </span>
-          <span className="text-xs font-mono text-gray-400">program.notarize</span>
+          <span className="text-xs font-mono text-gray-500">program.notarize</span>
           {isDemo && (
             <span className="cal-pill bg-amber-50 text-amber-700 border border-amber-200 font-mono text-xs flex items-center space-x-1">
               <FlaskConical className="w-3 h-3" /><span>DEMO</span>
@@ -206,7 +206,7 @@ export default function NotarizeStudio({ onProofCreated }) {
         <div className="cal-card p-6 space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-gray-100">
             <div>
-              <span className="text-xs font-mono font-bold text-gray-400 uppercase">Step 01</span>
+              <span className="text-xs font-mono font-bold text-gray-500 uppercase">Step 01</span>
               <h3 className="text-base font-bold text-gray-950 font-sans">Artifact Input</h3>
             </div>
             <button
@@ -223,7 +223,7 @@ export default function NotarizeStudio({ onProofCreated }) {
 
           {docHash && (
             <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-1.5 text-xs font-mono">
-              <div className="flex items-center justify-between text-gray-500 text-[11px]">
+              <div className="flex items-center justify-between text-gray-500 text-xs">
                 <div className="flex items-center space-x-1.5">
                   <Cpu className="w-3.5 h-3.5 text-emerald-600" />
                   <span className="font-semibold text-gray-700">Client-Side Calculated SHA-256 Digest:</span>
@@ -247,7 +247,7 @@ export default function NotarizeStudio({ onProofCreated }) {
         {/* Bento Card 2: Provenance context */}
         <div className="cal-card p-6 space-y-4">
           <div className="pb-3 border-b border-gray-100">
-            <span className="text-xs font-mono font-bold text-gray-400 uppercase">Step 02</span>
+            <span className="text-xs font-mono font-bold text-gray-500 uppercase">Step 02</span>
             <h3 className="text-base font-bold text-gray-950 font-sans">Provenance Context</h3>
           </div>
 
@@ -268,14 +268,14 @@ export default function NotarizeStudio({ onProofCreated }) {
                 className="cal-input font-mono text-xs"
                 placeholder="Receiver wallet address (base58)"
               />
-              {receiverError && <div className="text-[11px] text-red-700 mt-1">{receiverError}</div>}
+              {receiverError && <div className="text-xs text-red-700 mt-1">{receiverError}</div>}
             </div>
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-bold text-gray-700">Based on (parent documents, optional)</label>
-              <span className="text-[11px] font-mono text-gray-400">{parents.length}/{MAX_PARENTS}</span>
+              <span className="text-xs font-mono text-gray-500">{parents.length}/{MAX_PARENTS}</span>
             </div>
             <div className="flex items-center space-x-2">
               <input
@@ -297,7 +297,7 @@ export default function NotarizeStudio({ onProofCreated }) {
                     key={p.proof_pda}
                     type="button"
                     onClick={() => addParent(p.document_hash)}
-                    className="text-[11px] font-mono px-2 py-1 rounded-full bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-600"
+                    className="text-xs font-mono px-2 py-1 rounded-full bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-600"
                     title={p.document_hash}
                   >
                     {getMeta(p.proof_pda)?.file_name || shortKey(p.document_hash, 6)}
@@ -308,7 +308,7 @@ export default function NotarizeStudio({ onProofCreated }) {
             {parents.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {parents.map((h) => (
-                  <span key={h} className="inline-flex items-center space-x-1 text-[11px] font-mono px-2 py-1 rounded-full bg-gray-100 border border-gray-200 text-gray-700">
+                  <span key={h} className="inline-flex items-center space-x-1 text-xs font-mono px-2 py-1 rounded-full bg-gray-100 border border-gray-200 text-gray-700">
                     <span>{shortKey(h, 8)}</span>
                     <button type="button" aria-label="Remove parent" onClick={() => setParents(parents.filter((x) => x !== h))}>
                       <X className="w-3 h-3" />
@@ -319,7 +319,7 @@ export default function NotarizeStudio({ onProofCreated }) {
             )}
           </div>
 
-          <div className="text-[11px] font-mono text-gray-500">
+          <div className="text-xs font-mono text-gray-500">
             Timestamp comes from the Solana clock when the transaction lands. You cannot back-date a proof.
           </div>
         </div>
@@ -328,7 +328,7 @@ export default function NotarizeStudio({ onProofCreated }) {
         <div className="cal-card p-6 space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-gray-100">
             <div>
-              <span className="text-xs font-mono font-bold text-gray-400 uppercase">Step 03</span>
+              <span className="text-xs font-mono font-bold text-gray-500 uppercase">Step 03</span>
               <h3 className="text-base font-bold text-gray-950 font-sans">Wallet Signature &amp; Proof Account</h3>
             </div>
             {!isDemo && lowBalance && cluster === 'devnet' && !useRelay && (
@@ -344,7 +344,7 @@ export default function NotarizeStudio({ onProofCreated }) {
           </div>
 
           {!isDemo && signer?.kind === 'wallet' && (
-            <div className="text-[11px] font-mono text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+            <div className="text-xs font-mono text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
               Wallet extensions do not tell websites which network they are on. Make sure {signer.label} is set to Solana {cluster === 'devnet' ? 'Devnet' : cluster}
               {cluster === 'devnet' ? ' (Phantom: Settings, Developer Settings, Testnet Mode).' : '.'}
             </div>
@@ -353,16 +353,16 @@ export default function NotarizeStudio({ onProofCreated }) {
           {!isDemo && API_URL && (
             <label className="flex items-center space-x-2 text-xs text-gray-700 cursor-pointer select-none">
               <input type="checkbox" checked={useRelay} onChange={(e) => setUseRelay(e.target.checked)} className="accent-black" />
-              <span>Let the Notary relayer pay the network fee <span className="text-gray-400">(you still sign; no SOL needed)</span></span>
+              <span>Let the Notary relayer pay the network fee <span className="text-gray-500">(you still sign; no SOL needed)</span></span>
             </label>
           )}
 
           <div className="p-3.5 rounded-xl bg-gray-50 text-xs font-mono border border-gray-200 space-y-1">
-            <span className="text-gray-500 font-bold block text-[11px]">Proof account (PDA) that will hold this record:</span>
+            <span className="text-gray-500 font-bold block text-xs">Proof account (PDA) that will hold this record:</span>
             <div className="text-gray-800 break-all select-all font-mono">
               {pdaPreview || 'Select a document and connect a wallet to derive the address'}
             </div>
-            <div className="text-[11px] text-gray-500 pt-1">
+            <div className="text-xs text-gray-500 pt-1">
               seeds: [“proof”, signer, document_hash] · your wallet signs the transaction, there is no separate signature to paste.
               {balance !== null && ` Balance: ${(balance / 1e9).toFixed(4)} SOL.`}
             </div>
@@ -412,7 +412,7 @@ export default function NotarizeStudio({ onProofCreated }) {
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4">
             <div className="space-y-3 text-xs font-mono min-w-0">
               <div className="p-3.5 rounded-xl bg-white border border-gray-200">
-                <span className="text-gray-500 block text-[10px]">Proof account (PDA)</span>
+                <span className="text-gray-500 block text-xs">Proof account (PDA)</span>
                 <div className="flex items-center justify-between mt-1 gap-2">
                   <span className="text-gray-900 font-bold text-sm break-all">{result.proof_pda}</span>
                   <button
@@ -428,17 +428,17 @@ export default function NotarizeStudio({ onProofCreated }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="p-3.5 rounded-xl bg-white border border-gray-200">
-                  <span className="text-gray-500 block text-[10px]">Signer</span>
+                  <span className="text-gray-500 block text-xs">Signer</span>
                   <span className="text-gray-900 font-bold text-sm mt-1 block">{shortKey(result.proof.signer, 6)}</span>
                 </div>
                 <div className="p-3.5 rounded-xl bg-white border border-gray-200">
-                  <span className="text-gray-500 block text-[10px]">Chain time (UTC)</span>
+                  <span className="text-gray-500 block text-xs">Chain time (UTC)</span>
                   <span className="text-gray-900 font-bold text-sm mt-1 block">{result.proof.created_at_iso}</span>
                 </div>
               </div>
 
               <div>
-                <span className="text-gray-500 block text-[10px] mb-1">Transaction Signature:</span>
+                <span className="text-gray-500 block text-xs mb-1">Transaction Signature:</span>
                 <div className="p-3 rounded-xl bg-white text-xs text-gray-800 break-all select-all border border-gray-200 font-bold">
                   {result.tx_signature}
                 </div>
@@ -448,7 +448,7 @@ export default function NotarizeStudio({ onProofCreated }) {
             {qr && (
               <div className="flex flex-col items-center space-y-1.5">
                 <img src={qr} alt="QR code of the verification link" className="w-32 h-32 rounded-lg border border-gray-200 bg-white" />
-                <span className="text-[10px] font-mono text-gray-500">Scan to verify</span>
+                <span className="text-xs font-mono text-gray-500">Scan to verify</span>
               </div>
             )}
           </div>

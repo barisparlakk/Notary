@@ -106,7 +106,7 @@ export default function AgreementStudio() {
         <div className="cal-card p-6 space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-gray-100">
             <div>
-              <span className="text-xs font-mono font-bold text-gray-400 uppercase">Step 01</span>
+              <span className="text-xs font-mono font-bold text-gray-500 uppercase">Step 01</span>
               <h3 className="text-base font-bold text-gray-950 font-sans">Contract Document</h3>
             </div>
             {isDemo && (
@@ -119,7 +119,7 @@ export default function AgreementStudio() {
           <FileDrop id="agreement-file-input" onFile={handleFile} title={file ? file.name : 'Select or drag & drop the contract'} subtitle={file ? `${(file.size / 1024).toFixed(2)} KB • Hashed locally, the file never leaves your browser` : 'Every party must later sign this exact file'} />
           {docHash && (
             <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-1.5 text-xs font-mono">
-              <div className="flex items-center space-x-1.5 text-gray-500 text-[11px]">
+              <div className="flex items-center space-x-1.5 text-gray-500 text-xs">
                 <Cpu className="w-3.5 h-3.5 text-emerald-600" />
                 <span className="font-semibold text-gray-700">Client-Side Calculated SHA-256 Digest:</span>
               </div>
@@ -131,21 +131,21 @@ export default function AgreementStudio() {
         <div className="cal-card p-6 space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-gray-100">
             <div>
-              <span className="text-xs font-mono font-bold text-gray-400 uppercase">Step 02</span>
+              <span className="text-xs font-mono font-bold text-gray-500 uppercase">Step 02</span>
               <h3 className="text-base font-bold text-gray-950 font-sans">Parties</h3>
             </div>
-            <span className="text-[11px] font-mono text-gray-400">{parties.length}/{MAX_PARTIES} parties</span>
+            <span className="text-xs font-mono text-gray-500">{parties.length}/{MAX_PARTIES} parties</span>
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between p-2.5 rounded-lg bg-gray-50 border border-gray-200 text-[11px] font-mono">
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-gray-50 border border-gray-200 text-xs font-mono">
               <span className="break-all">{me || 'Connect a wallet to be the first party'}</span>
-              <span className="cal-pill text-[10px] py-0.5 px-2 bg-white text-gray-600 shrink-0 ml-2">You · signs on creation</span>
+              <span className="cal-pill text-xs py-0.5 px-2 bg-white text-gray-600 shrink-0 ml-2">You · signs on creation</span>
             </div>
             {others.map((o) => (
-              <div key={o} className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-gray-200 text-[11px] font-mono">
+              <div key={o} className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-gray-200 text-xs font-mono">
                 <span className="break-all">{o}</span>
-                <button type="button" aria-label="Remove party" onClick={() => setOthers(others.filter((x) => x !== o))} className="text-gray-400 hover:text-red-700 ml-2">
+                <button type="button" aria-label="Remove party" onClick={() => setOthers(others.filter((x) => x !== o))} className="text-gray-500 hover:text-red-700 ml-2">
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -170,38 +170,38 @@ export default function AgreementStudio() {
             <div className="flex flex-wrap gap-1.5">
               {known.slice(0, 6).map((k) => (
                 <button key={k.address} type="button" onClick={() => addParty(k.address)} title={k.address}
-                  className="text-[11px] font-mono px-2 py-1 rounded-full bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-600">
+                  className="text-xs font-mono px-2 py-1 rounded-full bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-600">
                   + {k.label}
                 </button>
               ))}
               {isDemo && (
                 <button type="button" onClick={() => setDemoParties([...demoParties, addDemoParty()])}
-                  className="text-[11px] font-mono px-2 py-1 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800">
+                  className="text-xs font-mono px-2 py-1 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800">
                   + New demo party
                 </button>
               )}
             </div>
           )}
-          <div className="text-[11px] font-mono text-gray-500">
+          <div className="text-xs font-mono text-gray-500">
             The agreement counts as complete only when every party has signed the same file. Signing times come from the Solana clock.
           </div>
         </div>
 
         <div className="cal-card p-6 space-y-4">
           <div className="pb-3 border-b border-gray-100">
-            <span className="text-xs font-mono font-bold text-gray-400 uppercase">Step 03</span>
+            <span className="text-xs font-mono font-bold text-gray-500 uppercase">Step 03</span>
             <h3 className="text-base font-bold text-gray-950 font-sans">Wallet Signature &amp; Agreement Account</h3>
           </div>
           {!isDemo && API_URL && (
             <label className="flex items-center space-x-2 text-xs text-gray-700 cursor-pointer select-none">
               <input type="checkbox" checked={useRelay} onChange={(e) => setUseRelay(e.target.checked)} className="accent-black" />
-              <span>Let the Notary relayer pay the network fee <span className="text-gray-400">(you still sign; no SOL needed)</span></span>
+              <span>Let the Notary relayer pay the network fee <span className="text-gray-500">(you still sign; no SOL needed)</span></span>
             </label>
           )}
           <div className="p-3.5 rounded-xl bg-gray-50 text-xs font-mono border border-gray-200 space-y-1">
-            <span className="text-gray-500 font-bold block text-[11px]">Agreement account (PDA) that will track the signatures:</span>
+            <span className="text-gray-500 font-bold block text-xs">Agreement account (PDA) that will track the signatures:</span>
             <div className="text-gray-800 break-all select-all">{pdaPreview || 'Select a document and connect a wallet to derive the address'}</div>
-            <div className="text-[11px] text-gray-500 pt-1">seeds: [“agreement”, creator, document_hash]</div>
+            <div className="text-xs text-gray-500 pt-1">seeds: [“agreement”, creator, document_hash]</div>
           </div>
         </div>
 
@@ -221,7 +221,7 @@ export default function AgreementStudio() {
           <span>{isSubmitting ? 'Waiting for wallet and network...' : isDemo ? 'Create DEMO agreement (not on-chain)' : 'Sign & Create Agreement'}</span>
           <ArrowRight className="w-4 h-4 ml-1" />
         </button>
-        {parties.length < 2 && <div className="text-[11px] font-mono text-gray-500 -mt-3">Add at least one more party.</div>}
+        {parties.length < 2 && <div className="text-xs font-mono text-gray-500 -mt-3">Add at least one more party.</div>}
       </form>
 
       {result && (
@@ -241,7 +241,7 @@ export default function AgreementStudio() {
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4">
             <div className="space-y-3 text-xs font-mono min-w-0">
               <div className="p-3.5 rounded-xl bg-white border border-gray-200">
-                <span className="text-gray-500 block text-[10px]">Agreement account (PDA)</span>
+                <span className="text-gray-500 block text-xs">Agreement account (PDA)</span>
                 <div className="flex items-center justify-between mt-1 gap-2">
                   <span className="text-gray-900 font-bold text-sm break-all">{result.agreement_pda}</span>
                   <button type="button" onClick={() => copy(result.agreement_pda, 'pda')} className="text-gray-500 hover:text-black shrink-0" aria-label="Copy PDA">
@@ -250,22 +250,22 @@ export default function AgreementStudio() {
                 </div>
               </div>
               <div className="p-3.5 rounded-xl bg-white border border-gray-200 space-y-1.5">
-                <span className="text-gray-500 block text-[10px]">Parties</span>
+                <span className="text-gray-500 block text-xs">Parties</span>
                 {result.agreement.parties.map((p) => (
-                  <div key={p.signer} className="flex items-center justify-between text-[11px]">
+                  <div key={p.signer} className="flex items-center justify-between text-xs">
                     <span title={p.signer}>{shortKey(p.signer, 6)}{p.signer === me ? ' (you)' : ''}</span>
                     <span className={p.signed_at ? 'text-emerald-700' : 'text-amber-700'}>{p.signed_at ? `signed ${p.signed_at_iso}` : 'waiting for signature'}</span>
                   </div>
                 ))}
               </div>
-              <div className="text-[11px] text-gray-600 font-sans leading-relaxed">
+              <div className="text-xs text-gray-600 font-sans leading-relaxed">
                 Send the contract file and the verify link to the other parties. Each one opens <b>Ledger &amp; Registry &gt; Agreements</b>, loads the same file and signs with their own wallet.
               </div>
             </div>
             {qr && (
               <div className="flex flex-col items-center space-y-1.5">
                 <img src={qr} alt="QR code of the verification link" className="w-32 h-32 rounded-lg border border-gray-200 bg-white" />
-                <span className="text-[10px] font-mono text-gray-500">Scan to check status</span>
+                <span className="text-xs font-mono text-gray-500">Scan to check status</span>
               </div>
             )}
           </div>

@@ -168,7 +168,7 @@ export default function LedgerExplorer() {
               <span className="cal-pill bg-gray-100 text-gray-800 font-mono text-xs">
                 IMMUTABLE AUDIT TRAIL
               </span>
-              <span className="text-xs font-mono text-gray-400">{isDemo ? 'demo (in-browser)' : `solana-${cluster}`}</span>
+              <span className="text-xs font-mono text-gray-500">{isDemo ? 'demo (in-browser)' : `solana-${cluster}`}</span>
             </div>
             <h2 className="text-3xl font-extrabold tracking-tight text-gray-950 font-sans">
               Ledger & Identity Registry
@@ -179,7 +179,7 @@ export default function LedgerExplorer() {
           </div>
 
           {/* Pulsar Glass Liquid Segmented Tabs */}
-          <div className="self-start max-w-full overflow-x-auto">
+          <div className="self-start w-full sm:w-auto sm:shrink-0 max-w-full overflow-x-auto">
             <PulsarGlassSegmented
               options={[
                 { value: 'proofs', label: `Proof Accounts (${proofs.length})`, icon: <Layers className="w-3.5 h-3.5" /> },
@@ -199,7 +199,7 @@ export default function LedgerExplorer() {
           <div className="cal-card p-5 space-y-1.5">
             <div className="text-xs font-mono text-gray-500">Proof Accounts</div>
             <div className="text-2xl font-extrabold text-gray-950 font-sans">{proofs.length}</div>
-            <div className="text-[11px] text-emerald-600 font-medium flex items-center space-x-1">
+            <div className="text-xs text-emerald-600 font-medium flex items-center space-x-1">
               <span>{listLabel}</span>
             </div>
           </div>
@@ -207,7 +207,7 @@ export default function LedgerExplorer() {
           <div className="cal-card p-5 space-y-1.5">
             <div className="text-xs font-mono text-gray-500">Known Identities</div>
             <div className="text-2xl font-extrabold text-gray-950 font-sans">{identities.length + (signer ? 1 : 0)}</div>
-            <div className="text-[11px] text-blue-600 font-medium flex items-center space-x-1">
+            <div className="text-xs text-blue-600 font-medium flex items-center space-x-1">
               <span>Wallet addresses</span>
             </div>
           </div>
@@ -215,7 +215,7 @@ export default function LedgerExplorer() {
           <div className="cal-card p-5 space-y-1.5">
             <div className="text-xs font-mono text-gray-500">Solana Network</div>
             <div className="text-2xl font-extrabold text-gray-950 font-sans">{isDemo ? 'Demo' : cluster === 'devnet' ? 'Devnet' : cluster}</div>
-            <div className="text-[11px] text-gray-500 font-medium flex items-center space-x-1">
+            <div className="text-xs text-gray-500 font-medium flex items-center space-x-1">
               <span className={`w-1.5 h-1.5 rounded-full ${isDemo ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
               <span>{isDemo ? 'Not on-chain' : 'Sub-second finality'}</span>
             </div>
@@ -224,7 +224,7 @@ export default function LedgerExplorer() {
           <div className="cal-card p-5 space-y-1.5">
             <div className="text-xs font-mono text-gray-500">Verification</div>
             <div className="text-2xl font-extrabold text-gray-950 font-sans">Direct RPC</div>
-            <div className="text-[11px] text-emerald-600 font-medium">
+            <div className="text-xs text-emerald-600 font-medium">
               No API in the loop
             </div>
           </div>
@@ -239,7 +239,7 @@ export default function LedgerExplorer() {
           {/* Search Bar (Cal.com style) */}
           <div className="flex items-center space-x-2">
             <div className="relative flex-1">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
+              <Search className="w-4 h-4 text-gray-500 absolute left-3.5 top-3" />
               <input
                 type="text"
                 value={searchQuery}
@@ -253,13 +253,13 @@ export default function LedgerExplorer() {
               {loading ? 'Reading…' : 'Look up'}
             </button>
           </div>
-          {lookupError && <div className="text-[11px] text-red-700">{lookupError}</div>}
+          {lookupError && <div className="text-xs text-red-700">{lookupError}</div>}
 
           {/* Clean High-Density Table (Cal.com style) */}
           <div className="cal-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs font-mono">
-                <thead className="bg-gray-50/80 text-gray-500 border-b border-gray-200 uppercase tracking-wider text-[10px]">
+                <thead className="bg-gray-50/80 text-gray-500 border-b border-gray-200 uppercase tracking-wider text-xs">
                   <tr>
                     <th className="py-3 px-4 font-bold text-gray-700">Proof Account</th>
                     <th className="py-3 px-4 font-bold text-gray-700">Artifact & Route</th>
@@ -272,7 +272,7 @@ export default function LedgerExplorer() {
                 <tbody className="divide-y divide-gray-100">
                   {filteredProofs.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-gray-400 text-xs">
+                      <td colSpan={6} className="py-12 text-center text-gray-500 text-xs">
                         {signer ? 'No proof accounts found. Notarize a document or look up another signer.' : 'Connect a wallet to see your proofs, or look up any signer, PDA or hash above.'}
                       </td>
                     </tr>
@@ -284,28 +284,28 @@ export default function LedgerExplorer() {
                         </td>
                         <td className="py-3.5 px-4">
                           <div className="text-gray-900 font-semibold flex items-center space-x-1.5 font-sans">
-                            <FileText className="w-3.5 h-3.5 text-gray-400" />
+                            <FileText className="w-3.5 h-3.5 text-gray-500" />
                             <span>{getMeta(p.proof_pda)?.file_name || 'unlabeled document'}</span>
                           </div>
-                          <div className="text-[11px] text-gray-500 mt-0.5">
+                          <div className="text-xs text-gray-500 mt-0.5">
                             {knownLabel(p.signer) || shortKey(p.signer, 5)} ➔ {p.receiver ? (knownLabel(p.receiver) || shortKey(p.receiver, 5)) : '—'}
                           </div>
                         </td>
                         <td className="py-3.5 px-4 max-w-[200px]">
                           <div className="flex items-center space-x-1.5">
-                            <span className="truncate text-gray-600 select-all font-mono text-[11px]" title={p.document_hash}>
+                            <span className="truncate text-gray-600 select-all font-mono text-xs" title={p.document_hash}>
                               {p.document_hash.substring(0, 14)}...{p.document_hash.substring(58)}
                             </span>
                             <button
                               onClick={() => copyToClipboard(p.document_hash, p.proof_pda)}
-                              className="text-gray-400 hover:text-black cursor-pointer"
+                              className="text-gray-500 hover:text-black cursor-pointer"
                               title="Copy SHA-256"
                             >
                               {copiedKey === p.proof_pda ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
                             </button>
                           </div>
                         </td>
-                        <td className="py-3.5 px-4 text-gray-500 tabular-nums whitespace-nowrap text-[11px]">
+                        <td className="py-3.5 px-4 text-gray-500 tabular-nums whitespace-nowrap text-xs">
                           {p.created_at_iso}
                         </td>
                         <td className="py-3.5 px-4">
@@ -314,13 +314,13 @@ export default function LedgerExplorer() {
                               href={`https://explorer.solana.com/address/${p.proof_pda}?cluster=${cluster}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center space-x-1 text-blue-600 hover:underline text-[11px] font-medium font-sans"
+                              className="inline-flex items-center space-x-1 text-blue-600 hover:underline text-xs font-medium font-sans"
                             >
                               <span>Proof account</span>
                               <ArrowUpRight className="w-3 h-3" />
                             </a>
                           ) : (
-                            <span className="text-gray-400 text-[11px]">Demo record</span>
+                            <span className="text-gray-500 text-xs">Demo record</span>
                           )}
                         </td>
                         <td className="py-3.5 px-4 text-right">
@@ -381,7 +381,7 @@ export default function LedgerExplorer() {
                   className="cal-input font-mono text-xs resize-none"
                   required
                 />
-                {identityError && <div className="text-[11px] text-red-700 mt-1">{identityError}</div>}
+                {identityError && <div className="text-xs text-red-700 mt-1">{identityError}</div>}
               </div>
               <button
                 type="submit"
@@ -406,23 +406,23 @@ export default function LedgerExplorer() {
                   <div key={id.address} className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[10px]">
+                        <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs">
                           {id.label.substring(0, 2).toUpperCase()}
                         </div>
                         <span className="text-xs font-bold font-mono text-gray-900">{id.label}</span>
                       </div>
-                      <span className="cal-pill text-[10px] py-0.5 px-2 bg-white text-gray-600">
+                      <span className="cal-pill text-xs py-0.5 px-2 bg-white text-gray-600">
                         Ed25519
                       </span>
                     </div>
 
                     <div className="space-y-1 pt-1">
-                      <span className="text-[10px] text-gray-400 font-mono block">Wallet address:</span>
-                      <div className="flex items-center justify-between p-2 rounded-lg bg-white text-[11px] font-mono text-gray-700 border border-gray-200">
+                      <span className="text-xs text-gray-500 font-mono block">Wallet address:</span>
+                      <div className="flex items-center justify-between p-2 rounded-lg bg-white text-xs font-mono text-gray-700 border border-gray-200">
                         <span className="truncate pr-2">{id.address}</span>
                         <button
                           onClick={() => copyToClipboard(id.address, id.address)}
-                          className="text-gray-400 hover:text-black cursor-pointer"
+                          className="text-gray-500 hover:text-black cursor-pointer"
                           aria-label="Copy address"
                         >
                           {copiedKey === id.address ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -437,7 +437,7 @@ export default function LedgerExplorer() {
                       {!id.self && (
                         <button
                           onClick={() => setIdentities(removeIdentity(id.address))}
-                          className="text-gray-400 hover:text-red-700 cursor-pointer"
+                          className="text-gray-500 hover:text-red-700 cursor-pointer"
                           aria-label="Remove identity"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -468,7 +468,7 @@ export default function LedgerExplorer() {
                   <span>Based on (provenance, read from the chain)</span>
                 </div>
                 {ancestors.map((a) => (
-                  <div key={a.document_hash} className="flex items-center justify-between text-[11px] font-mono text-gray-600">
+                  <div key={a.document_hash} className="flex items-center justify-between text-xs font-mono text-gray-600">
                     <span title={a.document_hash}>{shortKey(a.document_hash, 10)}</span>
                     <span>{a.missing ? <span className="text-amber-700">no proof on-chain</span> : `${knownLabel(a.signer) || shortKey(a.signer, 5)} · ${a.created_at_iso}`}</span>
                   </div>

@@ -139,7 +139,7 @@ export default function PipelineSimulator() {
               <div className="cal-pill text-gray-800 bg-gray-50 border-gray-200 hover:border-gray-300 transition-colors cursor-default">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 <span className="font-semibold">{isDemo ? 'DEMO mode · not on-chain' : `Solana ${cluster === 'devnet' ? 'Devnet' : cluster} Live`}</span>
-                <span className="text-gray-400">›</span>
+                <span className="text-gray-500">›</span>
               </div>
               <div className="cal-pill bg-emerald-50 text-emerald-800 border-emerald-200/80">
                 <Shield className="w-3 h-3 text-emerald-600" />
@@ -196,7 +196,7 @@ export default function PipelineSimulator() {
 
             <label className="inline-flex items-center space-x-2 text-xs text-gray-700 cursor-pointer select-none">
               <input type="checkbox" checked={apiOutage} onChange={(e) => setApiOutage(e.target.checked)} className="accent-black" />
-              <span>Simulate our API being offline <span className="text-gray-400">(verification does not use it)</span></span>
+              <span>Simulate our API being offline <span className="text-gray-500">(verification does not use it)</span></span>
             </label>
 
             <div className="text-xs text-gray-500 font-medium flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -235,17 +235,17 @@ export default function PipelineSimulator() {
                   </div>
                   <div>
                     <div className="text-xs font-bold text-gray-900">agent_a (Research & Strategy)</div>
-                    <div className="text-[11px] text-gray-500">Dispatching to agent_b (Treasury)</div>
+                    <div className="text-xs text-gray-500">Dispatching to agent_b (Treasury)</div>
                   </div>
                 </div>
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
                   Ready to Sign
                 </span>
               </div>
 
               {/* Title & Payload Spec */}
               <div className="space-y-1">
-                <div className="text-xs uppercase tracking-wider font-bold text-gray-400 font-mono">Action Item</div>
+                <div className="text-xs uppercase tracking-wider font-bold text-gray-500 font-mono">Action Item</div>
                 <div className="text-lg font-bold text-gray-900">EXECUTE_PORTFOLIO_REBALANCE</div>
                 <p className="text-xs text-gray-500">
                   Allocation: <span className="font-mono text-gray-700 font-medium">0x4a9b...c38d</span> • Amount: <span className="font-bold text-gray-900">$150,000.00 USD</span>
@@ -265,7 +265,7 @@ export default function PipelineSimulator() {
                   >
                     Tamper Test
                   </div>
-                  <div className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 text-gray-400 text-center text-xs font-medium">
+                  <div className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 text-gray-500 text-center text-xs font-medium">
                     Batch Mode
                   </div>
                 </div>
@@ -273,11 +273,11 @@ export default function PipelineSimulator() {
 
               {/* Live Hash & Signature Micro-Preview */}
               <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-2 text-xs font-mono">
-                <div className="flex items-center justify-between text-gray-500 text-[11px]">
+                <div className="flex items-center justify-between text-gray-500 text-xs">
                   <span>SHA-256 Fingerprint</span>
                   <span className="text-emerald-600 font-bold">256-bit</span>
                 </div>
-                <div className="text-[11px] text-gray-700 font-mono truncate select-all">
+                <div className="text-xs text-gray-700 font-mono truncate select-all">
                   {docHash || "88a1b5c4... (Calculated dynamically on execution)"}
                 </div>
               </div>
@@ -339,7 +339,7 @@ export default function PipelineSimulator() {
                 <div className="w-3 h-3 rounded-full bg-emerald-500 absolute -bottom-1.5"></div>
               </div>
               <div className="w-16 h-16 rounded-full bg-white border border-gray-200 shadow-md flex items-center justify-center text-center p-2 absolute z-10">
-                <div className="text-[10px] font-bold text-gray-900 leading-tight">SHA-256 Hex</div>
+                <div className="text-xs font-bold text-gray-900 leading-tight">SHA-256 Hex</div>
               </div>
             </div>
           </div>
@@ -363,16 +363,16 @@ export default function PipelineSimulator() {
                   <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                   <span className="font-bold text-gray-800">agent_a</span>
                 </div>
-                <span className="text-[10px] text-gray-400">Agent wallet</span>
-                <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[10px]">Ed25519</span>
+                <span className="text-xs text-gray-500">Agent wallet</span>
+                <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">Ed25519</span>
               </div>
               <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-gray-200 shadow-xs">
                 <div className="flex items-center space-x-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                   <span className="font-bold text-gray-800">agent_b</span>
                 </div>
-                <span className="text-[10px] text-gray-400">Agent wallet</span>
-                <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[10px]">Ed25519</span>
+                <span className="text-xs text-gray-500">Agent wallet</span>
+                <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">Ed25519</span>
               </div>
             </div>
           </div>
@@ -392,13 +392,13 @@ export default function PipelineSimulator() {
             {/* Simulated Solana Transaction Card (Like Cal.com's Card 03) */}
             <div className="h-44 rounded-xl bg-gray-50 border border-gray-200 p-3.5 flex flex-col justify-center space-y-2 font-mono text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] text-gray-500">Solana Network</span>
-                <span className="text-[11px] text-emerald-600 font-bold">Devnet Cluster</span>
+                <span className="text-xs text-gray-500">Solana Network</span>
+                <span className="text-xs text-emerald-600 font-bold">Devnet Cluster</span>
               </div>
-              <div className="p-2.5 rounded-lg bg-white border border-gray-200 text-[11px] text-gray-700 break-all select-all font-mono">
+              <div className="p-2.5 rounded-lg bg-white border border-gray-200 text-xs text-gray-700 break-all select-all font-mono">
                 PDA seeds: [proof, signer, sha256]
               </div>
-              <div className="flex justify-between items-center text-[10px] text-gray-400 pt-1">
+              <div className="flex justify-between items-center text-xs text-gray-500 pt-1">
                 <span>Finality: ~400ms</span>
                 <span className="text-blue-600 font-medium">Verified On-Chain</span>
               </div>
@@ -440,11 +440,11 @@ export default function PipelineSimulator() {
                     ? 'bg-black text-white border-black shadow-md scale-[1.02]'
                     : isDone
                     ? 'bg-emerald-50/70 border-emerald-200 text-gray-900'
-                    : 'bg-white border-gray-200 text-gray-400'
+                    : 'bg-white border-gray-200 text-gray-500'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className={`text-[10px] font-mono font-bold ${isCurrent ? 'text-gray-300' : 'text-gray-400'}`}>
+                  <span className={`text-xs font-mono font-bold ${isCurrent ? 'text-gray-300' : 'text-gray-500'}`}>
                     STEP 0{s.num}
                   </span>
                   {isDone ? (
@@ -455,8 +455,8 @@ export default function PipelineSimulator() {
                     <Icon className="w-3.5 h-3.5 text-gray-300" />
                   )}
                 </div>
-                <div className="text-xs font-bold truncate">{s.title}</div>
-                <div className={`text-[10px] mt-0.5 truncate ${isCurrent ? 'text-gray-300' : 'text-gray-500'}`}>
+                <div className="text-xs font-bold">{s.title}</div>
+                <div className={`text-xs mt-0.5 ${isCurrent ? 'text-gray-300' : 'text-gray-500'}`}>
                   {s.desc}
                 </div>
               </div>
@@ -536,7 +536,7 @@ export default function PipelineSimulator() {
 
                 <div className="space-y-3 font-mono text-xs">
                   <div>
-                    <div className="flex items-center justify-between text-gray-500 text-[11px] mb-1">
+                    <div className="flex items-center justify-between text-gray-500 text-xs mb-1">
                       <span>Original Document SHA-256 Digest:</span>
                       <button
                         onClick={() => copyToClipboard(docHash, 'hash')}
@@ -553,7 +553,7 @@ export default function PipelineSimulator() {
 
                   {pdaPreview && (
                     <div>
-                      <span className="text-[11px] text-gray-500 block mb-1">
+                      <span className="text-xs text-gray-500 block mb-1">
                         Proof Account (PDA) derived from [&quot;proof&quot;, signer, sha256]:
                       </span>
                       <div className="cal-hash-block text-gray-600 bg-white">
@@ -564,7 +564,7 @@ export default function PipelineSimulator() {
 
                   {signer && (
                     <div>
-                      <span className="text-[11px] text-gray-500 block mb-1">
+                      <span className="text-xs text-gray-500 block mb-1">
                         Signer ({signer.label}), signs the transaction:
                       </span>
                       <div className="cal-hash-block text-gray-700">
@@ -598,18 +598,18 @@ export default function PipelineSimulator() {
 
                 <div className="grid grid-cols-2 gap-2 text-xs font-mono">
                   <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
-                    <span className="text-gray-500 block text-[10px]">Proof account (PDA)</span>
+                    <span className="text-gray-500 block text-xs">Proof account (PDA)</span>
                     <span className="text-gray-900 font-bold text-xs" title={notarizeResult.proof_pda}>{shortKey(notarizeResult.proof_pda, 6)}</span>
                   </div>
                   <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
-                    <span className="text-gray-500 block text-[10px]">Chain time (UTC)</span>
+                    <span className="text-gray-500 block text-xs">Chain time (UTC)</span>
                     <span className="text-gray-900 font-bold text-xs">{notarizeResult.proof.created_at_iso}</span>
                   </div>
                 </div>
 
                 <div>
-                  <span className="text-gray-500 block text-[10px] font-mono mb-1">Transaction Signature</span>
-                  <div className="cal-hash-block text-[11px] text-gray-700">
+                  <span className="text-gray-500 block text-xs font-mono mb-1">Transaction Signature</span>
+                  <div className="cal-hash-block text-xs text-gray-700">
                     {notarizeResult.tx_signature}
                   </div>
                 </div>
@@ -667,7 +667,7 @@ export default function PipelineSimulator() {
                 {/* Direct Hash Comparison Bars */}
                 <div className="space-y-2 text-xs font-mono">
                   <div className="p-3 rounded-xl bg-white border border-gray-200">
-                    <span className="text-[10px] text-gray-500 block mb-0.5">
+                    <span className="text-xs text-gray-500 block mb-0.5">
                       On-Chain Notarized Hash (Anchored Proof):
                     </span>
                     <span className="text-emerald-700 font-bold text-xs break-all select-all">
@@ -676,7 +676,7 @@ export default function PipelineSimulator() {
                   </div>
 
                   <div className="p-3 rounded-xl bg-white border border-gray-200">
-                    <span className="text-[10px] text-gray-500 block mb-0.5">
+                    <span className="text-xs text-gray-500 block mb-0.5">
                       Received Artifact Hash (Recipient Audit):
                     </span>
                     <span className={`font-bold text-xs break-all select-all ${
@@ -694,7 +694,7 @@ export default function PipelineSimulator() {
                       <AlertTriangle className="w-4 h-4" />
                       <span>Avalanche Effect Protected Treasury:</span>
                     </div>
-                    <p className="text-[11px] text-gray-600">
+                    <p className="text-xs text-gray-600">
                       Changing a single character (from $150k to $1.5M) completely altered the 256-bit SHA-256 fingerprint. Recipient Agent B rejected the execution immediately. Zero unauthorized transactions executed.
                     </p>
                   </div>

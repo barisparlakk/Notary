@@ -43,7 +43,7 @@ export default function WalletButton() {
         <div className="absolute right-0 mt-2 w-64 cal-card p-3 space-y-2 z-50" role="group" aria-label="Wallet">
           {connected ? (
             <>
-              <div className="text-[11px] font-mono text-gray-500 break-all">{String(signer.publicKey)}</div>
+              <div className="text-xs font-mono text-gray-500 break-all">{String(signer.publicKey)}</div>
               <button onClick={() => { wallet.disconnect(); setOpen(false); }} className="cal-btn-secondary w-full py-1.5 text-xs rounded-lg flex items-center justify-center space-x-1.5">
                 <LogOut className="w-3 h-3" /><span>Disconnect</span>
               </button>
@@ -55,16 +55,16 @@ export default function WalletButton() {
                 const installed = w.readyState === 'Installed' || w.readyState === 'Loadable';
                 return installed ? (
                   <button key={w.adapter.name} onClick={() => pick(w.adapter.name)} className="cal-btn-secondary w-full py-1.5 px-2.5 text-xs rounded-lg flex items-center justify-between">
-                    <span>{w.adapter.name}</span><span className="text-[10px] text-emerald-600">Detected</span>
+                    <span>{w.adapter.name}</span><span className="text-xs text-emerald-600">Detected</span>
                   </button>
                 ) : (
                   <a key={w.adapter.name} href={w.adapter.url} target="_blank" rel="noopener noreferrer" className="cal-btn-secondary w-full py-1.5 px-2.5 text-xs rounded-lg flex items-center justify-between">
-                    <span>{w.adapter.name}</span><span className="text-[10px] text-gray-500 flex items-center space-x-1"><span>Install</span><ExternalLink className="w-2.5 h-2.5" /></span>
+                    <span>{w.adapter.name}</span><span className="text-xs text-gray-500 flex items-center space-x-1"><span>Install</span><ExternalLink className="w-2.5 h-2.5" /></span>
                   </a>
                 );
               })}
-              {isDemo && <div className="text-[10px] font-mono text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">DEMO mode: a throwaway browser key signs. Nothing is written on-chain.</div>}
-              {error && <div className="text-[10px] text-red-700">{error}</div>}
+              {isDemo && <div className="text-xs font-mono text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">DEMO mode: a throwaway browser key signs. Nothing is written on-chain.</div>}
+              {error && <div className="text-xs text-red-700">{error}</div>}
             </>
           )}
         </div>

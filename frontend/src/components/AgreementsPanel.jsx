@@ -58,11 +58,11 @@ export default function AgreementsPanel({ onLoaded }) {
 
   return (
     <div className="space-y-4">
-      {error && <div className="text-[11px] text-red-700 font-mono break-all">{error}</div>}
+      {error && <div className="text-xs text-red-700 font-mono break-all">{error}</div>}
       <div className="cal-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs font-mono">
-            <thead className="bg-gray-50/80 text-gray-500 border-b border-gray-200 uppercase tracking-wider text-[10px]">
+            <thead className="bg-gray-50/80 text-gray-500 border-b border-gray-200 uppercase tracking-wider text-xs">
               <tr>
                 <th className="py-3 px-4 font-bold text-gray-700">Agreement</th>
                 <th className="py-3 px-4 font-bold text-gray-700">Document</th>
@@ -74,7 +74,7 @@ export default function AgreementsPanel({ onLoaded }) {
             <tbody className="divide-y divide-gray-100">
               {list.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-gray-400 text-xs">
+                  <td colSpan={5} className="py-12 text-center text-gray-500 text-xs">
                     {loading ? 'Reading agreements from the chain...' : signer
                       ? 'No agreements yet. Create one in Notarize Studio > Multi-party agreement.'
                       : 'Connect a wallet to see agreements you are a party to.'}
@@ -87,10 +87,10 @@ export default function AgreementsPanel({ onLoaded }) {
                     <td className="py-3.5 px-4 font-bold text-gray-900" title={a.agreement_pda}>{shortKey(a.agreement_pda, 6)}</td>
                     <td className="py-3.5 px-4">
                       <div className="text-gray-900 font-semibold flex items-center space-x-1.5 font-sans">
-                        <FileText className="w-3.5 h-3.5 text-gray-400" />
+                        <FileText className="w-3.5 h-3.5 text-gray-500" />
                         <span>{getMeta(a.agreement_pda)?.file_name || 'unlabeled contract'}</span>
                       </div>
-                      <div className="text-[11px] text-gray-500 mt-0.5" title={a.document_hash}>{a.document_hash.substring(0, 14)}...{a.document_hash.substring(58)}</div>
+                      <div className="text-xs text-gray-500 mt-0.5" title={a.document_hash}>{a.document_hash.substring(0, 14)}...{a.document_hash.substring(58)}</div>
                     </td>
                     <td className="py-3.5 px-4 tabular-nums">{a.signed_count} / {a.parties.length}</td>
                     <td className="py-3.5 px-4">
@@ -116,13 +116,13 @@ export default function AgreementsPanel({ onLoaded }) {
         <Dialog title={<>Agreement: {shortKey(selected.agreement_pda, 8)}</>} onClose={() => setSelected(null)}>
             <div className="space-y-2">
               {selected.parties.map((p) => (
-                <div key={p.signer} className="flex items-center justify-between p-2.5 rounded-lg bg-gray-50 border border-gray-200 text-[11px] font-mono">
+                <div key={p.signer} className="flex items-center justify-between p-2.5 rounded-lg bg-gray-50 border border-gray-200 text-xs font-mono">
                   <span className="break-all" title={p.signer}>{shortKey(p.signer, 8)}{p.signer === myAddress ? ' (you)' : ''}{p.signer === selected.creator ? ' · creator' : ''}</span>
                   <span className={p.signed_at ? 'text-emerald-700' : 'text-amber-700'}>{p.signed_at ? `signed ${p.signed_at_iso}` : 'not signed'}</span>
                 </div>
               ))}
             </div>
-            <div className="text-[11px] font-mono text-gray-500 break-all">SHA-256: {selected.document_hash}</div>
+            <div className="text-xs font-mono text-gray-500 break-all">SHA-256: {selected.document_hash}</div>
             <div className="flex flex-wrap justify-end gap-2 pt-2">
               <button onClick={() => copy(`${window.location.origin}/?tab=verify&pda=${selected.agreement_pda}`, 'link')} className="cal-btn-secondary px-3.5 py-2 text-xs rounded-lg flex items-center space-x-1.5">
                 {copied === 'link' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}<span>Copy verify link</span>
@@ -207,7 +207,7 @@ function SignModal({ agreement, options, onClose, onSigned }) {
         )}
 
         {hash && (
-          <div className={`p-3 rounded-xl border text-[11px] font-mono break-all ${matches ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+          <div className={`p-3 rounded-xl border text-xs font-mono break-all ${matches ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
             {matches ? 'This file matches the agreement. Safe to sign.' : 'This file does NOT match the agreement (different SHA-256). Do not sign.'}
             <div className="mt-1 text-gray-600">{hash}</div>
           </div>

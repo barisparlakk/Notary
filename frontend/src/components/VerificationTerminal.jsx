@@ -149,7 +149,7 @@ export default function VerificationTerminal({ initialPda = '' }) {
           <span className="cal-pill bg-gray-100 text-gray-800 font-mono text-xs">
             RECEIVER INTERFACE
           </span>
-          <span className="text-xs font-mono text-gray-400">getAccountInfo(PDA)</span>
+          <span className="text-xs font-mono text-gray-500">getAccountInfo(PDA)</span>
           <span className="cal-pill-emerald font-mono text-xs">NO API REQUIRED</span>
           {isDemo && (
             <span className="cal-pill bg-amber-50 text-amber-700 border border-amber-200 font-mono text-xs flex items-center space-x-1">
@@ -171,7 +171,7 @@ export default function VerificationTerminal({ initialPda = '' }) {
         <div className="cal-card p-6 space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-gray-100">
             <div>
-              <span className="text-xs font-mono font-bold text-gray-400 uppercase">Step 01</span>
+              <span className="text-xs font-mono font-bold text-gray-500 uppercase">Step 01</span>
               <h3 className="text-base font-bold text-gray-950 font-sans">Received Artifact</h3>
             </div>
 
@@ -199,7 +199,7 @@ export default function VerificationTerminal({ initialPda = '' }) {
 
           {receivedHash && (
             <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-1.5 text-xs font-mono">
-              <div className="flex items-center space-x-1.5 text-gray-500 text-[11px]">
+              <div className="flex items-center space-x-1.5 text-gray-500 text-xs">
                 <Cpu className="w-3.5 h-3.5 text-blue-600" />
                 <span className="font-semibold text-gray-700">Calculated Incoming SHA-256 Digest:</span>
               </div>
@@ -214,12 +214,12 @@ export default function VerificationTerminal({ initialPda = '' }) {
         <div className="cal-card p-6 space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-gray-100">
             <div>
-              <span className="text-xs font-mono font-bold text-gray-400 uppercase">Step 02</span>
+              <span className="text-xs font-mono font-bold text-gray-500 uppercase">Step 02</span>
               <h3 className="text-base font-bold text-gray-950 font-sans">Proof Reference</h3>
             </div>
             {recent.length > 0 && (
               <span className="text-xs font-mono text-gray-500 flex items-center space-x-1">
-                <History className="w-3.5 h-3.5 text-gray-400" />
+                <History className="w-3.5 h-3.5 text-gray-500" />
                 <span>{recent.length} proof(s) signed by you</span>
               </span>
             )}
@@ -243,9 +243,9 @@ export default function VerificationTerminal({ initialPda = '' }) {
                   >
                     <div className="flex items-center justify-between font-mono font-bold">
                       <span className="text-gray-900">{shortKey(p.proof_pda, 6)}</span>
-                      <span className="text-[10px] text-gray-400">{p.created_at_iso}</span>
+                      <span className="text-xs text-gray-500">{p.created_at_iso}</span>
                     </div>
-                    <div className="text-[11px] text-gray-500 truncate mt-1">
+                    <div className="text-xs text-gray-500 truncate mt-1">
                       {getMeta(p.proof_pda)?.file_name || shortKey(p.document_hash, 10)}
                     </div>
                   </div>
@@ -256,7 +256,7 @@ export default function VerificationTerminal({ initialPda = '' }) {
 
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1.5">
-              Proof account (PDA) or signer address <span className="font-normal text-gray-400">(optional)</span>
+              Proof account (PDA) or signer address <span className="font-normal text-gray-500">(optional)</span>
             </label>
             <input
               type="text"
@@ -316,14 +316,14 @@ export default function VerificationTerminal({ initialPda = '' }) {
 
           <div className="space-y-2.5 text-xs font-mono">
             <div className="p-3.5 rounded-xl bg-white border border-gray-200">
-              <span className="text-[10px] text-gray-500 block mb-0.5">Anchored On-Chain Digest:</span>
+              <span className="text-xs text-gray-500 block mb-0.5">Anchored On-Chain Digest:</span>
               <span className={`break-all select-all font-bold text-xs ${result.original_hash ? 'text-emerald-700' : 'text-gray-500'}`}>
                 {result.original_hash || '(no proof account found)'}
               </span>
             </div>
 
             <div className="p-3.5 rounded-xl bg-white border border-gray-200">
-              <span className="text-[10px] text-gray-500 block mb-0.5">Received File Digest:</span>
+              <span className="text-xs text-gray-500 block mb-0.5">Received File Digest:</span>
               <span className={`break-all select-all font-bold text-xs ${result.status === 'VERIFIED' ? 'text-emerald-700' : 'text-red-600'}`}>
                 {result.received_hash}
               </span>
@@ -336,7 +336,7 @@ export default function VerificationTerminal({ initialPda = '' }) {
                 Parties: {result.agreement.signed_count} of {result.agreement.parties.length} signed
               </div>
               {result.agreement.parties.map((p) => (
-                <div key={p.signer} className="flex items-center justify-between text-[11px] font-mono">
+                <div key={p.signer} className="flex items-center justify-between text-xs font-mono">
                   <span title={p.signer}>{shortKey(p.signer, 8)}{p.signer === result.agreement.creator ? ' · creator' : ''}</span>
                   <span className={p.signed_at ? 'text-emerald-700' : 'text-amber-700'}>{p.signed_at ? `signed ${p.signed_at_iso}` : 'not signed yet'}</span>
                 </div>
@@ -347,15 +347,15 @@ export default function VerificationTerminal({ initialPda = '' }) {
           {result.proof && (
             <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
               <div className="p-3 rounded-xl bg-white border border-gray-200">
-                <span className="text-gray-500 block text-[10px]">Signer</span>
+                <span className="text-gray-500 block text-xs">Signer</span>
                 <span className="text-gray-900 font-bold" title={result.proof.signer}>{shortKey(result.proof.signer, 6)}</span>
               </div>
               <div className="p-3 rounded-xl bg-white border border-gray-200">
-                <span className="text-gray-500 block text-[10px]">Receiver</span>
+                <span className="text-gray-500 block text-xs">Receiver</span>
                 <span className="text-gray-900 font-bold" title={result.proof.receiver || ''}>{result.proof.receiver ? shortKey(result.proof.receiver, 6) : '—'}</span>
               </div>
               <div className="p-3 rounded-xl bg-white border border-gray-200">
-                <span className="text-gray-500 block text-[10px]">Chain time (UTC)</span>
+                <span className="text-gray-500 block text-xs">Chain time (UTC)</span>
                 <span className="text-gray-900 font-bold truncate block">{result.proof.created_at_iso}</span>
               </div>
             </div>
@@ -368,7 +368,7 @@ export default function VerificationTerminal({ initialPda = '' }) {
                 <span>This document is based on (read from the chain)</span>
               </div>
               {ancestors.map((a) => (
-                <div key={a.document_hash} className="flex items-center justify-between text-[11px] font-mono text-gray-600">
+                <div key={a.document_hash} className="flex items-center justify-between text-xs font-mono text-gray-600">
                   <span title={a.document_hash}>{shortKey(a.document_hash, 10)}</span>
                   <span>
                     {a.missing ? <span className="text-amber-700">no proof on-chain</span> : `${shortKey(a.signer, 5)} · ${a.created_at_iso}`}
@@ -379,7 +379,7 @@ export default function VerificationTerminal({ initialPda = '' }) {
           )}
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-[11px] font-mono text-gray-500">Source: {source}</span>
+            <span className="text-xs font-mono text-gray-500">Source: {source}</span>
             {result.proof_pda && !isDemo && (
               <a
                 href={`https://explorer.solana.com/address/${result.proof_pda}?cluster=${cluster}`}
