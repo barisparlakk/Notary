@@ -122,6 +122,13 @@ export default function Navbar({ activeTab, setActiveTab }) {
             );
           })}
         </div>
+
+        {/* Telefonda başlıkta rozete yer yok: DEMO modu yine de görünür kalmalı */}
+        {isDemo && (
+          <div className="sm:hidden -mx-4 px-4 py-1.5 bg-amber-50 border-t border-amber-200 text-xs text-amber-800" role="status">
+            DEMO mode. Nothing is written on-chain.
+          </div>
+        )}
       </div>
     </header>
   );

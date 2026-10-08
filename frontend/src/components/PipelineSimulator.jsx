@@ -199,16 +199,14 @@ export default function PipelineSimulator() {
               <span>Simulate our API being offline <span className="text-gray-400">(verification does not use it)</span></span>
             </label>
 
-            <div className="text-xs text-gray-500 font-medium flex items-center space-x-2">
+            <div className="text-xs text-gray-500 font-medium flex flex-wrap items-center gap-x-4 gap-y-1">
               <span>✓ Verifies without our API</span>
-              <span>•</span>
               <span>✓ Wallet-signed, chain-timestamped</span>
-              <span>•</span>
               <span>✓ Sub-second finality</span>
             </div>
 
             {/* Social / Crypto Proof Badges */}
-            <div className="pt-2 flex items-center space-x-6 border-t border-gray-100">
+            <div className="pt-2 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-gray-100">
               <div className="flex items-center space-x-1.5 text-xs text-gray-500 font-mono">
                 <span className="font-bold text-gray-900">Solana PDA</span>
                 <span>proof account</span>

@@ -145,7 +145,7 @@ export default function VerificationTerminal({ initialPda = '' }) {
 
       {/* Header (Cal.com style) */}
       <div className="space-y-3">
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="cal-pill bg-gray-100 text-gray-800 font-mono text-xs">
             RECEIVER INTERFACE
           </span>

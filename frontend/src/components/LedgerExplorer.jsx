@@ -179,7 +179,7 @@ export default function LedgerExplorer() {
           </div>
 
           {/* Pulsar Glass Liquid Segmented Tabs */}
-          <div className="self-start">
+          <div className="self-start max-w-full overflow-x-auto">
             <PulsarGlassSegmented
               options={[
                 { value: 'proofs', label: `Proof Accounts (${proofs.length})`, icon: <Layers className="w-3.5 h-3.5" /> },
