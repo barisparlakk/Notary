@@ -1,0 +1,106 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main, integration]
+
+jobs:
+  python:
+    name: agents and backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r agents/requirements.txt -r backend/requirements.txt
+      - run: python -m pytest -q agents/tests
+      - run: python -m pytest -q backend/tests
+
+  frontend:
+    name: frontend tests and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  # Programı gerçek bir Solana runtime'ında sınar: derle, yerel doğrulayıcıya yükle, agents ve frontend e2e + relay.
+  onchain:
+    name: program on a real validator
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AGAVE_VERSION: v4.3.0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Solana (Agave)
+        run: |
+          curl -sSfL -o solana.tar.bz2 "https://github.com/anza-xyz/agave/releases/download/${AGAVE_VERSION}/solana-release-x86_64-unknown-linux-gnu.tar.bz2"
+          tar xjf solana.tar.bz2
+          echo "$PWD/solana-release/bin" >> "$GITHUB_PATH"
+
+      - name: Throwaway keys and program id
+        run: |
+          solana-keygen new --no-bip39-passphrase --silent -o "$RUNNER_TEMP/program.json"
+          solana-keygen new --no-bip39-passphrase --silent -o "$RUNNER_TEMP/funder.json"
+          PID=$(solana-keygen pubkey "$RUNNER_TEMP/program.json")
+          echo "PROGRAM_ID=$PID" >> "$GITHUB_ENV"
+          # CI'da gerçek program anahtarı yok: declare_id! geçici kimlikle değiştirilir (yalnızca bu çalıştırmada)
+          sed -i "s/declare_id!(\"[^\"]*\");/declare_id!(\"$PID\");/" program/programs/notary/src/lib.rs
+
+      - name: Build the program (SBPF v3)
+        run: cd program/programs/notary && cargo build-sbf --arch v3
+
+      - name: Start a local validator and deploy
+        run: |
+          solana-test-validator --reset --quiet --ledger "$RUNNER_TEMP/ledger" > "$RUNNER_TEMP/validator.log" 2>&1 &
+          for i in $(seq 1 60); do
+            curl -s -X POST http://127.0.0.1:8899 -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' | grep -q ok && break
+            sleep 2
+          done
+          solana airdrop 50 "$(solana-keygen pubkey "$RUNNER_TEMP/funder.json")" --url http://127.0.0.1:8899
+          solana program deploy program/target/deploy/notary.so --program-id "$RUNNER_TEMP/program.json" \
+            --keypair "$RUNNER_TEMP/funder.json" --url http://127.0.0.1:8899
+
+      - name: Agents against the real program
+        run: |
+          pip install -r agents/requirements.txt
+          cd agents
+          NOTARY_TEST_RPC=http://127.0.0.1:8899 NOTARY_TEST_PROGRAM="$PROGRAM_ID" NOTARY_TEST_FUNDER="$RUNNER_TEMP/funder.json" \
+            python -m pytest -q tests/test_realchain.py
+          python demo_v2.py --rpc http://127.0.0.1:8899 --program "$PROGRAM_ID" --funder "$RUNNER_TEMP/funder.json" --chain --agreement --delay 0
+
+      - name: Frontend e2e with the relayer
+        run: |
+          pip install -r backend/requirements.txt
+          cd backend
+          PROGRAM_ID="$PROGRAM_ID" SOLANA_RPC_URL=http://127.0.0.1:8899 uvicorn app.main:app --port 8765 &
+          sleep 5
+          RELAYER=$(curl -s localhost:8765/relay/info | python -c "import json,sys; print(json.load(sys.stdin)['relayer_pubkey'])")
+          solana transfer "$RELAYER" 3 --from "$RUNNER_TEMP/funder.json" --fee-payer "$RUNNER_TEMP/funder.json" \
+            --url http://127.0.0.1:8899 --allow-unfunded-recipient
+          sleep 2
+          cd ../frontend && npm ci
+          RPC_URL=http://127.0.0.1:8899 PROGRAM_ID="$PROGRAM_ID" RELAY_URL=http://127.0.0.1:8765 FUNDER="$RUNNER_TEMP/funder.json" \
+            npm run e2e:local
