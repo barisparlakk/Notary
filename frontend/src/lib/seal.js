@@ -38,21 +38,36 @@ export function sealSpec(hashHex) {
   return { ticks, curves };
 }
 
-/** Bir hipotrokoid eğrisinin SVG yol verisi (merkezde, FIT yarıçapına ölçeklenmiş). */
-export function curvePath({ r, d }) {
+/** Bir hipotrokoid eğrisinin noktaları (merkezde, FIT yarıçapına ölçeklenmiş, döndürülmemiş). */
+export function curvePoints({ r, d }) {
   const k = (R - r) / r;
   const loops = r / gcd(R, r); // eğrinin kapanması için gereken tur
   const steps = Math.min(loops * 48, 1800);
-  const extent = R - r + d;
-  const scale = FIT / extent;
-  let out = '';
+  const scale = FIT / (R - r + d);
+  const pts = [];
   for (let i = 0; i <= steps; i++) {
     const t = (i / steps) * Math.PI * 2 * loops;
-    const x = ((R - r) * Math.cos(t) + d * Math.cos(k * t)) * scale;
-    const y = ((R - r) * Math.sin(t) - d * Math.sin(k * t)) * scale;
-    out += `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
+    pts.push([
+      ((R - r) * Math.cos(t) + d * Math.cos(k * t)) * scale,
+      ((R - r) * Math.sin(t) - d * Math.sin(k * t)) * scale,
+    ]);
   }
-  return out;
+  return pts;
+}
+
+/** Aynı eğrinin SVG yol verisi. */
+export function curvePath(c) {
+  return curvePoints(c).map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join('');
+}
+
+/** Dış halka çizgileri [[x1,y1,x2,y2],...] (PDF gibi vektör hedefler için). */
+export function tickSegments(ticks) {
+  const n = ticks.length;
+  return ticks.map((t, i) => {
+    const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const r1 = 107 - 1.5 - t * 0.55;
+    return [Math.cos(a) * r1, Math.sin(a) * r1, Math.cos(a) * 108, Math.sin(a) * 108];
+  });
 }
 
 /** Dış halkadaki çizgiler: i. çizginin boyu i. hex hanesine (0..15) bağlı. */

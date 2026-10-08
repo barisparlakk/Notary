@@ -37,7 +37,7 @@ function NotaryState({ children }) {
   }, [wallet.connected, wallet.publicKey, wallet.signTransaction, wallet.wallet, demoKeypair]);
 
   const value = useMemo(
-    () => ({ chain, signer, isDemo: USE_MOCK, programId: EFFECTIVE_PROGRAM_ID, cluster: CLUSTER, connection, wallet }),
+    () => ({ chain, signer, isDemo: USE_MOCK, programId: EFFECTIVE_PROGRAM_ID, cluster: USE_MOCK ? 'demo' : CLUSTER, connection, wallet }),
     [chain, signer, connection, wallet]
   );
   return <NotaryContext.Provider value={value}>{children}</NotaryContext.Provider>;

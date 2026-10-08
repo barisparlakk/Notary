@@ -261,3 +261,22 @@ test('PDF sertifika: geçerli bir PDF üretir (kayıt ve sözleşme)', async () 
     assert.ok(bytes.length > 4000, 'QR görseli ve metin içerir');
   }
 });
+
+test('DEMO sertifikası "devnet" demez; PDF mührü hash\'e bağlı ve geçerli PDF üretir', async () => {
+  const { buildCertificatePdf } = await import('../src/lib/certificatePdf.js');
+  const mk = (hashSeed, cluster) => {
+    const proof = chain.decodeProof(Buffer.from(V.golden.proof_account_receiver_one_parent_hex, 'hex'));
+    return chain.buildCertificate({ proofPda: V.proof_pda, proof: { ...proof, document_hash: hashSeed }, txSignature: 'sig', programId: V.program_id, cluster, verifyUrl: 'https://example.test/' });
+  };
+  const h1 = 'ab'.repeat(32);
+  const h2 = 'cd'.repeat(32);
+  const demo = mk(h1, 'demo');
+  assert.equal(demo.cluster, 'demo');
+  const sizes = [];
+  for (const c of [mk(h1, 'devnet'), mk(h2, 'devnet'), demo]) {
+    const bytes = Buffer.from(await (await buildCertificatePdf(c)).arrayBuffer());
+    assert.equal(bytes.subarray(0, 5).toString(), '%PDF-');
+    sizes.push(bytes.length);
+  }
+  assert.ok(sizes[0] > 30000, 'vektör mühür PDF\'e çizildi');
+});

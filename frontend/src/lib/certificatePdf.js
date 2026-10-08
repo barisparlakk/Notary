@@ -1,6 +1,7 @@
 // Doğrulama sertifikasını PDF olarak üretir (tarayıcıda; hiçbir şey sunucuya gitmez). jsPDF yalnızca bu dosya
 // çağrıldığında yüklenir (dinamik import), ana pakete girmez.
 import QRCode from 'qrcode';
+import { SEAL_INK, curvePoints, sealSpec, tickSegments } from './seal.js';
 
 export const LEGAL_NOTICE =
   'This certificate is a timestamped integrity proof anchored on the Solana blockchain. It shows that the listed wallet(s) '
@@ -8,6 +9,43 @@ export const LEGAL_NOTICE =
   + 'under eIDAS and does not by itself establish the identity of any signer or the legal validity of the document.';
 
 const wrap = (doc, text, width) => doc.splitTextToSize(String(text), width);
+
+const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+
+/** Mührü PDF'e vektör olarak çizer (görüntü değil: büyütünce de keskin kalır). */
+function drawSeal(doc, hash, cx, cy, radius, state, demo) {
+  const k = radius / 116;
+  const spec = sealSpec(hash);
+  const [r, g, b] = rgb(SEAL_INK[state] || SEAL_INK.neutral);
+  doc.setDrawColor(r, g, b);
+  if (demo) doc.setLineDashPattern([3, 2], 0);
+  doc.setLineWidth(1.4 * k);
+  doc.circle(cx, cy, 116 * k, 'S');
+  doc.setLineDashPattern([], 0);
+  doc.setLineWidth(0.5 * k);
+  doc.circle(cx, cy, 111 * k, 'S');
+  doc.setLineWidth(0.7 * k);
+  for (const [x1, y1, x2, y2] of tickSegments(spec.ticks)) doc.line(cx + x1 * k, cy + y1 * k, cx + x2 * k, cy + y2 * k);
+  doc.setLineWidth(0.4 * k);
+  for (const c of spec.curves) {
+    const th = (c.rot * Math.PI) / 180;
+    const cos = Math.cos(th);
+    const sin = Math.sin(th);
+    const pts = curvePoints(c).map(([x, y]) => [(x * cos - y * sin) * k, (x * sin + y * cos) * k]);
+    const rel = [];
+    for (let i = 1; i < pts.length; i++) rel.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]);
+    doc.lines(rel, cx + pts[0][0], cy + pts[0][1], [1, 1], 'S', false);
+  }
+  doc.setFillColor(255, 255, 255);
+  doc.setLineWidth(0.7 * k);
+  doc.circle(cx, cy, 14 * k, 'FD');
+  if (demo) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(Math.max(6, 11 * k));
+    doc.setTextColor(r, g, b);
+    doc.text('DEMO', cx, cy + 3 * k, { align: 'center' });
+  }
+}
 
 /**
  * @param certificate buildCertificate() ya da buildAgreementCertificate() çıktısı
@@ -33,8 +71,15 @@ export async function buildCertificatePdf(certificate) {
   doc.text('Notary', left, y);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(100, 116, 139);
   doc.text(isAgreement ? 'Agreement verification certificate' : 'Document verification certificate', left + 72, y);
-  y += 24;
-  doc.setDrawColor(229, 231, 235); doc.line(left, y, left + width, y); y += 20;
+  const isDemo = certificate.cluster === 'demo';
+  const sealState = isAgreement && !certificate.complete ? 'pending' : 'verified';
+  drawSeal(doc, certificate.document_hash, left + width - 52, 78, 50, sealState, isDemo);
+  if (isDemo) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(194, 54, 47);
+    doc.text('DEMO. Not recorded on Solana.', left, y + 18);
+  }
+  y += 70;
+  doc.setDrawColor(217, 220, 229); doc.line(left, y, left + width, y); y += 24;
 
   if (isAgreement) {
     heading(certificate.complete ? 'Status: complete, every party has signed' : `Status: pending, ${certificate.signed_count} of ${certificate.parties.length} parties have signed`);
