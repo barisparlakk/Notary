@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check as CheckIcon, Copy, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
+import { CopyButton as Copy2, Row } from './Facts';
 import FileDrop from './FileDrop';
 import Seal from './Seal';
 import { useNotary, shortKey } from '../lib/notary';
@@ -18,29 +19,6 @@ const STATEMENT = {
   INVALID: { title: 'This is not the file that was recorded.', seal: 'altered' },
   NOT_FOUND: { title: 'No record of this exact file.', seal: 'neutral' },
 };
-
-function Copy2({ text }) {
-  const [done, setDone] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={() => { navigator.clipboard.writeText(text); setDone(true); setTimeout(() => setDone(false), 1800); }}
-      className="text-gray-500 hover:text-ink p-1 -m-1 align-middle"
-      aria-label={done ? 'Copied' : 'Copy'}
-    >
-      {done ? <CheckIcon className="w-3.5 h-3.5 text-verified" /> : <Copy className="w-3.5 h-3.5" />}
-    </button>
-  );
-}
-
-function Row({ label, children }) {
-  return (
-    <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-4 py-3 border-t border-rule text-sm">
-      <dt className="text-gray-500">{label}</dt>
-      <dd className="min-w-0 break-words">{children}</dd>
-    </div>
-  );
-}
 
 export default function Check({ initialPda = '' }) {
   const { chain, signer, isDemo, cluster, programId } = useNotary();

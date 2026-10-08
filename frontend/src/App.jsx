@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Navbar from './components/Navbar';
 import Check from './components/Check';
-import NotarizeStudio from './components/NotarizeStudio';
+import Record from './components/Record';
 import LedgerExplorer from './components/LedgerExplorer';
 
 // Eski bağlantılar (daha önce verilmiş QR ve sertifikalar) çalışmaya devam eder: ?tab=verify&pda=...
@@ -23,7 +23,7 @@ export default function App() {
 
       <main id="main-content" className="flex-1 w-full max-w-page mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
         {activeTab === 'check' && <Check initialPda={initialPda} />}
-        {activeTab === 'record' && <NotarizeStudio />}
+        {activeTab === 'record' && <Record />}
         {activeTab === 'records' && <LedgerExplorer />}
       </main>
 
