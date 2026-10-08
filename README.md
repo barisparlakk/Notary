@@ -9,10 +9,11 @@ Solana'da bir **PDA hesabına** (`["proof", signer, hash]`) yazılır. Doğrulam
 | Klasör | İçerik |
 |---|---|
 | `program/` | Solana programı (Anchor, `cargo build-sbf --arch v3`) |
-| `agents/` | Python agent'ları: `onchain.py` (zincir istemcisi), `verify_standalone.py` (API'siz doğrulayıcı), `demo_v2.py` |
+| `agents/` | Python agent'ları: `onchain.py` (zincir istemcisi), `verify_standalone.py` (API'siz doğrulayıcı), `demo_v2.py`, `agent_service.py` (n8n için HTTP servisi) |
 | `frontend/` | React arayüzü: cüzdan imzası, zincirden doğrulama, DEMO modu |
-| `backend/` | Opsiyonel yardımcılar: `/relay` (ücreti ödeyen), v1 REST (geçiş dönemi) |
+| `backend/` | Relayer: kullanıcının SOL'ü olmadan işlem ücretini öder (`/relay`) |
 | `scripts/` | `deploy-devnet.sh`, `deploy-relay.sh` |
+| `docs/` | `DEMO_V2.md`, `n8n/`, test vektörleri, `deployment.json` |
 
 ## Hızlı başlangıç (yerel, gerçek Solana runtime'ı)
 ```bash
@@ -20,7 +21,7 @@ solana-test-validator --reset &
 solana program deploy program/target/deploy/notary.so --program-id <program-keypair.json> --keypair <fonlu.json> --url http://127.0.0.1:8899
 cd agents && pip install -r requirements.txt && python demo_v2.py --rpc http://127.0.0.1:8899 --program <PROGRAM_ID> --funder <fonlu.json>
 ```
-Sahte RPC ile (Solana kurmadan): `python agents/demo_v2.py --mock`. Frontend: [frontend/README.md](frontend/README.md).
+Sahte RPC ile (Solana kurmadan): `python agents/demo_v2.py --mock --chain --agreement`. Frontend: [frontend/README.md](frontend/README.md).
 
 ## Sınırlar
 - Kanıt, "bu cüzdan bu içeriği bu zamanda kaydetti ve sonra değişmedi" der. Hukuken nitelikli e-imzaya (eIDAS) eşdeğer **değildir**.
