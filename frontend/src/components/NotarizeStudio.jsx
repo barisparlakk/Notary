@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { PublicKey } from '@solana/web3.js';
 import {
-  UploadCloud,
   ShieldCheck,
   Check,
   Copy,
@@ -18,6 +17,7 @@ import {
   FlaskConical,
   Users,
 } from 'lucide-react';
+import FileDrop from './FileDrop';
 import { useNotary, shortKey } from '../lib/notary';
 import { buildCertificate, deriveProofPda, hexToBytes, sha256Hex, MAX_PARENTS } from '../lib/chain';
 import { getMeta, setMeta } from '../lib/localMeta';
@@ -219,31 +219,7 @@ export default function NotarizeStudio({ onProofCreated }) {
             </button>
           </div>
 
-          <div
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              if (e.dataTransfer.files?.[0]) handleFileChange(e.dataTransfer.files[0]);
-            }}
-            className="border-2 border-dashed border-gray-200 hover:border-gray-400 rounded-2xl p-8 text-center cursor-pointer transition-colors bg-gray-50/50 hover:bg-white"
-            onClick={() => document.getElementById('file-upload-input').click()}
-          >
-            <input
-              id="file-upload-input"
-              type="file"
-              className="hidden"
-              onChange={(e) => handleFileChange(e.target.files?.[0])}
-            />
-            <div className="w-12 h-12 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center mx-auto mb-3 text-gray-700">
-              <UploadCloud className="w-6 h-6" />
-            </div>
-            <div className="text-sm font-bold text-gray-900">
-              {file ? file.name : 'Select or drag & drop a document to notarize'}
-            </div>
-            <div className="text-xs text-gray-500 mt-1 font-mono">
-              {file ? `${(file.size / 1024).toFixed(2)} KB • Hashed locally, the file never leaves your browser` : 'Contracts, PDFs, JSON, model weights, execution logs'}
-            </div>
-          </div>
+          <FileDrop id="file-upload-input" onFile={handleFileChange} title={file ? file.name : 'Select or drag & drop a document to notarize'} subtitle={file ? `${(file.size / 1024).toFixed(2)} KB • Hashed locally, the file never leaves your browser` : 'Contracts, PDFs, JSON, model weights, execution logs'} />
 
           {docHash && (
             <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-1.5 text-xs font-mono">

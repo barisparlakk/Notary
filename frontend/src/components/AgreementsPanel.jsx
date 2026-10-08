@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, FileText, X, ArrowUpRight, AlertTriangle, UploadCloud, Clock, CheckCircle2 } from 'lucide-react';
+import { Check, Copy, FileText, X, ArrowUpRight, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
+import FileDrop from './FileDrop';
 import { useNotary, shortKey } from '../lib/notary';
 import { sha256Hex } from '../lib/chain';
 import { API_URL } from '../lib/config';
@@ -206,11 +207,7 @@ function SignModal({ agreement, options, onClose, onSigned }) {
           Load the contract file you received. Signing is only enabled when its SHA-256 matches the one stored in the agreement, so you never sign a document you have not seen.
         </p>
 
-        <label className="block border-2 border-dashed border-gray-200 hover:border-gray-400 rounded-2xl p-6 text-center cursor-pointer bg-gray-50/50">
-          <input type="file" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
-          <UploadCloud className="w-5 h-5 mx-auto mb-2 text-gray-600" />
-          <div className="text-xs font-bold text-gray-900">{fileName || 'Select the contract file'}</div>
-        </label>
+        <FileDrop compact id="sign-file-input" onFile={pick} title={fileName || 'Select the contract file'} />
 
         {demoCopy && !hash && (
           <button type="button" onClick={async () => { setFileName('demo_contract.txt'); setHash(await sha256Hex(demoCopy)); }}

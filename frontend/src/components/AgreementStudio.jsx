@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { PublicKey } from '@solana/web3.js';
-import { UploadCloud, Sparkles, Cpu, Check, Copy, Send, ArrowRight, ArrowUpRight, Download, Plus, X, Users, AlertTriangle, Clock } from 'lucide-react';
+import { Sparkles, Cpu, Check, Copy, Send, ArrowRight, ArrowUpRight, Download, Plus, X, Users, AlertTriangle, Clock } from 'lucide-react';
+import FileDrop from './FileDrop';
 import { useNotary, shortKey } from '../lib/notary';
 import { buildAgreementCertificate, MAX_PARTIES, sha256Hex, deriveAgreementPda, hexToBytes } from '../lib/chain';
 import { API_URL } from '../lib/config';
@@ -115,21 +116,7 @@ export default function AgreementStudio() {
               </button>
             )}
           </div>
-          <div
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0]); }}
-            className="border-2 border-dashed border-gray-200 hover:border-gray-400 rounded-2xl p-8 text-center cursor-pointer transition-colors bg-gray-50/50 hover:bg-white"
-            onClick={() => document.getElementById('agreement-file-input').click()}
-          >
-            <input id="agreement-file-input" type="file" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
-            <div className="w-12 h-12 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center mx-auto mb-3 text-gray-700">
-              <UploadCloud className="w-6 h-6" />
-            </div>
-            <div className="text-sm font-bold text-gray-900">{file ? file.name : 'Select or drag & drop the contract'}</div>
-            <div className="text-xs text-gray-500 mt-1 font-mono">
-              {file ? `${(file.size / 1024).toFixed(2)} KB • Hashed locally, the file never leaves your browser` : 'Every party must later sign this exact file'}
-            </div>
-          </div>
+          <FileDrop id="agreement-file-input" onFile={handleFile} title={file ? file.name : 'Select or drag & drop the contract'} subtitle={file ? `${(file.size / 1024).toFixed(2)} KB • Hashed locally, the file never leaves your browser` : 'Every party must later sign this exact file'} />
           {docHash && (
             <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-1.5 text-xs font-mono">
               <div className="flex items-center space-x-1.5 text-gray-500 text-[11px]">

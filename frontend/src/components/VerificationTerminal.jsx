@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   CheckCircle2,
   XCircle,
-  UploadCloud,
   Cpu,
   Search,
   History,
@@ -13,6 +12,7 @@ import {
   GitBranch,
   Clock,
 } from 'lucide-react';
+import FileDrop from './FileDrop';
 import { useNotary, shortKey } from '../lib/notary';
 import { lineage, sha256Hex, verifyDocument } from '../lib/chain';
 import { RPC_URL } from '../lib/config';
@@ -195,31 +195,7 @@ export default function VerificationTerminal({ initialPda = '' }) {
             )}
           </div>
 
-          <div
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              if (e.dataTransfer.files?.[0]) handleFileChange(e.dataTransfer.files[0]);
-            }}
-            className="border-2 border-dashed border-gray-200 hover:border-gray-400 rounded-2xl p-8 text-center cursor-pointer transition-colors bg-gray-50/50 hover:bg-white"
-            onClick={() => document.getElementById('verify-file-input').click()}
-          >
-            <input
-              id="verify-file-input"
-              type="file"
-              className="hidden"
-              onChange={(e) => handleFileChange(e.target.files?.[0])}
-            />
-            <div className="w-12 h-12 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center mx-auto mb-3 text-gray-700">
-              <UploadCloud className="w-6 h-6" />
-            </div>
-            <div className="text-sm font-bold text-gray-900">
-              {file ? file.name : 'Select or drop the file to audit'}
-            </div>
-            <div className="text-xs text-gray-500 mt-1 font-mono">
-              {file ? `${(file.size / 1024).toFixed(2)} KB • Hashed locally, never uploaded` : 'The 256-bit hash is computed in your browser'}
-            </div>
-          </div>
+          <FileDrop id="verify-file-input" onFile={handleFileChange} title={file ? file.name : 'Select or drop the file to audit'} subtitle={file ? `${(file.size / 1024).toFixed(2)} KB • Hashed locally, never uploaded` : 'The 256-bit hash is computed in your browser'} />
 
           {receivedHash && (
             <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-1.5 text-xs font-mono">
