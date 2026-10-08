@@ -9,11 +9,15 @@ export default function WalletButton() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const ref = useRef(null);
+  const trigger = useRef(null);
 
   useEffect(() => {
     const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    // Escape menüyü kapatır ve odağı düğmeye geri verir
+    const onKey = (e) => { if (e.key === 'Escape') { setOpen(false); trigger.current?.focus(); } };
     document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', onKey); };
   }, []);
 
   // select() sonrası seçili adaptör hazır olunca bağlan
@@ -30,13 +34,13 @@ export default function WalletButton() {
 
   return (
     <div className="relative" ref={ref}>
-      <button onClick={() => setOpen((o) => !o)} className="cal-btn-primary flex items-center space-x-1.5 text-xs py-1.5 px-3 rounded-full">
+      <button ref={trigger} onClick={() => setOpen((o) => !o)} aria-haspopup="true" aria-expanded={open} className="cal-btn-primary flex items-center space-x-1.5 text-xs py-1.5 px-3 rounded-full">
         <Wallet className="w-3 h-3" />
         <span className="font-mono">{label}</span>
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-64 cal-card p-3 space-y-2 z-50">
+        <div className="absolute right-0 mt-2 w-64 cal-card p-3 space-y-2 z-50" role="group" aria-label="Wallet">
           {connected ? (
             <>
               <div className="text-[11px] font-mono text-gray-500 break-all">{String(signer.publicKey)}</div>

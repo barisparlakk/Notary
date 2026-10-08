@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, FileText, X, ArrowUpRight, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
+import { Check, Copy, FileText, ArrowUpRight, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
+import Dialog from './Dialog';
 import FileDrop from './FileDrop';
 import { useNotary, shortKey } from '../lib/notary';
 import { sha256Hex } from '../lib/chain';
@@ -112,12 +113,7 @@ export default function AgreementsPanel({ onLoaded }) {
       </div>
 
       {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="cal-card max-w-xl w-full p-6 space-y-4 shadow-2xl bg-white border border-gray-300 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <span className="text-sm font-bold text-gray-900 font-sans">Agreement: {shortKey(selected.agreement_pda, 8)}</span>
-              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-900 p-1" aria-label="Close"><X className="w-4 h-4" /></button>
-            </div>
+        <Dialog title={<>Agreement: {shortKey(selected.agreement_pda, 8)}</>} onClose={() => setSelected(null)}>
             <div className="space-y-2">
               {selected.parties.map((p) => (
                 <div key={p.signer} className="flex items-center justify-between p-2.5 rounded-lg bg-gray-50 border border-gray-200 text-[11px] font-mono">
@@ -147,8 +143,7 @@ export default function AgreementsPanel({ onLoaded }) {
               )}
               <button onClick={() => setSelected(null)} className="cal-btn-secondary px-3.5 py-2 text-xs rounded-lg">Close</button>
             </div>
-          </div>
-        </div>
+        </Dialog>
       )}
 
       {signing && (
@@ -196,12 +191,7 @@ function SignModal({ agreement, options, onClose, onSigned }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-      <div className="cal-card max-w-xl w-full p-6 space-y-4 shadow-2xl bg-white border border-gray-300">
-        <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-          <span className="text-sm font-bold text-gray-900 font-sans">Sign agreement {shortKey(agreement.agreement_pda, 6)}</span>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-900 p-1" aria-label="Close"><X className="w-4 h-4" /></button>
-        </div>
+    <Dialog title={<>Sign agreement {shortKey(agreement.agreement_pda, 6)}</>} onClose={onClose}>
 
         <p className="text-xs text-gray-600 leading-relaxed">
           Load the contract file you received. Signing is only enabled when its SHA-256 matches the one stored in the agreement, so you never sign a document you have not seen.
@@ -250,7 +240,6 @@ function SignModal({ agreement, options, onClose, onSigned }) {
             {busy ? 'Waiting for wallet and network...' : `Sign as ${options[who]?.label ?? ''}`}
           </button>
         </div>
-      </div>
-    </div>
+        </Dialog>
   );
 }

@@ -7,7 +7,6 @@ import {
   UserPlus,
   Layers,
   FileText,
-  X,
   ArrowUpRight,
   Download,
   GitBranch,
@@ -17,6 +16,7 @@ import {
 import { useNotary, shortKey } from '../lib/notary';
 import { buildCertificate, lineage } from '../lib/chain';
 import { addIdentity, getIdentities, getMeta, removeIdentity } from '../lib/localMeta';
+import Dialog from './Dialog';
 import PulsarGlassSegmented from './PulsarGlassSegmented';
 import AgreementsPanel from './AgreementsPanel';
 import { downloadCertificatePdf } from '../lib/certificatePdf';
@@ -455,20 +455,7 @@ export default function LedgerExplorer() {
 
       {/* Proof Inspection Modal (Cal.com popup) */}
       {selectedProof && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="cal-card max-w-xl w-full p-6 space-y-4 shadow-2xl bg-white border border-gray-300 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <span className="text-sm font-bold text-gray-900 font-sans">
-                Proof Account: {shortKey(selectedProof.proof_pda, 8)}
-              </span>
-              <button
-                onClick={() => setSelectedProof(null)}
-                className="text-gray-400 hover:text-gray-900 cursor-pointer p-1"
-                aria-label="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+        <Dialog title={<>Proof Account: {shortKey(selectedProof.proof_pda, 8)}</>} onClose={() => setSelectedProof(null)}>
 
             <pre className="p-4 rounded-xl bg-gray-50 text-xs font-mono text-gray-800 overflow-x-auto border border-gray-200 leading-relaxed">
               {JSON.stringify(certificateOf(selectedProof), null, 2)}
@@ -522,8 +509,7 @@ export default function LedgerExplorer() {
                 Close
               </button>
             </div>
-          </div>
-        </div>
+        </Dialog>
       )}
 
     </div>
