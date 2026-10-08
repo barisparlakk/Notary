@@ -191,6 +191,24 @@ export function buildCertificate({ proofPda, proof, txSignature, programId, clus
   };
 }
 
+export function buildAgreementCertificate({ agreementPda, agreement, txSignature, programId, cluster = 'devnet', verifyUrl }) {
+  return {
+    version: 'notary.agreement.v1',
+    cluster,
+    program_id: pk(programId).toBase58(),
+    agreement_pda: String(agreementPda),
+    creator: agreement.creator,
+    document_hash: agreement.document_hash,
+    created_at: agreement.created_at_iso,
+    parties: agreement.parties.map((p) => ({ signer: p.signer, signed_at: p.signed_at_iso })),
+    signed_count: agreement.signed_count,
+    complete: agreement.complete,
+    tx_signature: txSignature || null,
+    explorer_url: `https://explorer.solana.com/address/${agreementPda}?cluster=${cluster}`,
+    verify_url: verifyUrl || `${globalThis.location?.origin ?? ''}/?tab=verify&pda=${agreementPda}`,
+  };
+}
+
 // ------------------------------------------------------------------ ortak doğrulama mantığı
 /** Zincir arayüzü (getProof / findByHash) üstünde CONTRACT.md v2, Bölüm 4. */
 function agreementResult(base, agreement, address, fileHash) {

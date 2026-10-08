@@ -17,11 +17,14 @@ import {
   X,
   AlertTriangle,
   FlaskConical,
+  Users,
 } from 'lucide-react';
 import { useNotary, shortKey } from '../lib/notary';
 import { buildCertificate, deriveProofPda, hexToBytes, sha256Hex, MAX_PARENTS } from '../lib/chain';
 import { getMeta, setMeta } from '../lib/localMeta';
 import { API_URL } from '../lib/config';
+import PulsarGlassSegmented from './PulsarGlassSegmented';
+import AgreementStudio from './AgreementStudio';
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -41,6 +44,7 @@ export default function NotarizeStudio({ onProofCreated }) {
   const [copiedField, setCopiedField] = useState('');
   const [balance, setBalance] = useState(null);
   const [useRelay, setUseRelay] = useState(!!API_URL);
+  const [mode, setMode] = useState('single'); // single: tek imza | agreement: çok taraflı sözleşme
 
   const handleFileChange = async (selectedFile) => {
     if (!selectedFile) return;
@@ -180,6 +184,22 @@ export default function NotarizeStudio({ onProofCreated }) {
         </p>
       </div>
 
+      <div className="self-start">
+        <PulsarGlassSegmented
+          options={[
+            { value: 'single', label: 'Single signer', icon: <ShieldCheck className="w-3.5 h-3.5" /> },
+            { value: 'agreement', label: 'Multi-party agreement', icon: <Users className="w-3.5 h-3.5" /> },
+          ]}
+          value={mode}
+          onChange={setMode}
+          size="sm"
+          theme="light"
+        />
+      </div>
+
+      {mode === 'agreement' && <AgreementStudio />}
+
+      {mode === 'single' && (<>
       <form onSubmit={handleSubmit} className="space-y-6">
 
         {/* Bento Card 1: Artifact Ingestion */}
@@ -491,6 +511,7 @@ export default function NotarizeStudio({ onProofCreated }) {
           </div>
         </div>
       )}
+      </>)}
 
     </div>
   );

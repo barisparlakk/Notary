@@ -12,17 +12,20 @@ import {
   Download,
   GitBranch,
   Trash2,
+  Users,
 } from 'lucide-react';
 import { useNotary, shortKey } from '../lib/notary';
 import { buildCertificate, lineage } from '../lib/chain';
 import { addIdentity, getIdentities, getMeta, removeIdentity } from '../lib/localMeta';
 import PulsarGlassSegmented from './PulsarGlassSegmented';
+import AgreementsPanel from './AgreementsPanel';
 
 const HEX64 = /^[0-9a-f]{64}$/i;
 
 export default function LedgerExplorer() {
   const { chain, signer, isDemo, cluster, programId } = useNotary();
   const [activeSection, setActiveSection] = useState('proofs');
+  const [agreementCount, setAgreementCount] = useState(0);
   const [proofs, setProofs] = useState([]);
   const [listLabel, setListLabel] = useState('Signed by you');
   const [loading, setLoading] = useState(false);
@@ -51,6 +54,14 @@ export default function LedgerExplorer() {
   }, [chain, signer]);
 
   useEffect(() => { loadMine(); }, [loadMine]);
+
+  // Sekme etiketindeki sözleşme sayısı, bölüm açılmadan da doğru görünsün
+  useEffect(() => {
+    let cancelled = false;
+    if (!signer) { setAgreementCount(0); return undefined; }
+    chain.listAgreementsFor(signer.publicKey).then((l) => { if (!cancelled) setAgreementCount(l.length); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [chain, signer]);
 
   // Herkese açık zincir araması: SHA-256, PDA ya da imzalayan adresi
   const handleLookup = async () => {
@@ -171,6 +182,7 @@ export default function LedgerExplorer() {
             <PulsarGlassSegmented
               options={[
                 { value: 'proofs', label: `Proof Accounts (${proofs.length})`, icon: <Layers className="w-3.5 h-3.5" /> },
+                { value: 'agreements', label: `Agreements (${agreementCount})`, icon: <Users className="w-3.5 h-3.5" /> },
                 { value: 'agents', label: `Identities (${identities.length + (signer ? 1 : 0)})`, icon: <UserPlus className="w-3.5 h-3.5" /> },
               ]}
               value={activeSection}
@@ -328,6 +340,9 @@ export default function LedgerExplorer() {
 
         </div>
       )}
+
+      {/* Agreements Section: çok taraflı sözleşmeler */}
+      {activeSection === 'agreements' && <AgreementsPanel onLoaded={setAgreementCount} />}
 
       {/* Identities Section */}
       {activeSection === 'agents' && (

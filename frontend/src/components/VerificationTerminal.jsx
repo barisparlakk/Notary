@@ -11,6 +11,7 @@ import {
   HelpCircle,
   FlaskConical,
   GitBranch,
+  Clock,
 } from 'lucide-react';
 import { useNotary, shortKey } from '../lib/notary';
 import { lineage, sha256Hex, verifyDocument } from '../lib/chain';
@@ -43,6 +44,13 @@ const THEME = {
     title: 'text-red-950',
     label: 'INTEGRITY VIOLATION DETECTED',
     text: 'Hash mismatch. The document was modified after it was notarized, or it does not belong to this proof account.',
+  },
+  PENDING: {
+    card: 'border-blue-300 bg-blue-50/50',
+    icon: 'bg-blue-100 border-blue-300 text-blue-700',
+    title: 'text-blue-950',
+    label: 'AUTHENTIC, WAITING FOR SIGNATURES',
+    text: 'The file matches the agreement on-chain, but not every party has signed yet. It is binding only once all parties have signed.',
   },
   NOT_FOUND: {
     card: 'border-amber-300 bg-amber-50/50',
@@ -113,8 +121,8 @@ export default function VerificationTerminal({ initialPda = '' }) {
       const ref = reference.trim();
       let opts = {};
       if (ref) {
-        // Önce PDA olarak dene; hesap yoksa imzalayan adresi say.
-        opts = (await chain.getProof(ref).catch(() => null)) ? { pda: ref } : { signer: ref };
+        // Önce PDA (kayıt ya da sözleşme) olarak dene; hesap yoksa imzalayan adresi say.
+        opts = (await chain.getRecord(ref).catch(() => null)) ? { pda: ref } : { signer: ref };
       }
       const res = await verifyDocument(chain, receivedHash, opts);
       setResult(res);
@@ -129,7 +137,7 @@ export default function VerificationTerminal({ initialPda = '' }) {
   };
 
   const theme = result ? THEME[result.status] : null;
-  const StatusIcon = result?.status === 'VERIFIED' ? CheckCircle2 : result?.status === 'INVALID' ? XCircle : HelpCircle;
+  const StatusIcon = { VERIFIED: CheckCircle2, INVALID: XCircle, PENDING: Clock }[result?.status] || HelpCircle;
   const source = isDemo ? 'in-browser DEMO store (not on-chain)' : new URL(RPC_URL).host;
 
   return (
@@ -317,14 +325,14 @@ export default function VerificationTerminal({ initialPda = '' }) {
           <div className="p-4 rounded-xl bg-white border border-gray-200 space-y-2 mb-4">
             <div className="flex items-center justify-between text-xs font-semibold">
               <span className="text-gray-700 font-sans">Cryptographic Fingerprint Match:</span>
-              <span className={`font-mono ${result.status === 'VERIFIED' ? 'text-emerald-600' : result.status === 'INVALID' ? 'text-red-600' : 'text-amber-600'}`}>
-                {result.status === 'VERIFIED' ? '100.0% Bit-level Match' : result.status === 'INVALID' ? '0.0% Match (Avalanche Effect)' : 'No record to compare'}
+              <span className={`font-mono ${result.status === 'VERIFIED' ? 'text-emerald-600' : result.status === 'PENDING' ? 'text-blue-600' : result.status === 'INVALID' ? 'text-red-600' : 'text-amber-600'}`}>
+                {result.status === 'VERIFIED' || result.status === 'PENDING' ? '100.0% Bit-level Match' : result.status === 'INVALID' ? '0.0% Match (Avalanche Effect)' : 'No record to compare'}
               </span>
             </div>
             <div className="w-full h-2.5 rounded-full bg-gray-100 overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
-                  result.status === 'VERIFIED' ? 'w-full bg-emerald-500' : result.status === 'INVALID' ? 'w-[5%] bg-red-500' : 'w-[2%] bg-amber-500'
+                  result.status === 'VERIFIED' ? 'w-full bg-emerald-500' : result.status === 'PENDING' ? 'w-full bg-blue-500' : result.status === 'INVALID' ? 'w-[5%] bg-red-500' : 'w-[2%] bg-amber-500'
                 }`}
               />
             </div>
@@ -345,6 +353,20 @@ export default function VerificationTerminal({ initialPda = '' }) {
               </span>
             </div>
           </div>
+
+          {result.agreement && (
+            <div className="mt-4 p-4 rounded-xl bg-white border border-gray-200 space-y-2">
+              <div className="text-xs font-bold text-gray-700">
+                Parties: {result.agreement.signed_count} of {result.agreement.parties.length} signed
+              </div>
+              {result.agreement.parties.map((p) => (
+                <div key={p.signer} className="flex items-center justify-between text-[11px] font-mono">
+                  <span title={p.signer}>{shortKey(p.signer, 8)}{p.signer === result.agreement.creator ? ' · creator' : ''}</span>
+                  <span className={p.signed_at ? 'text-emerald-700' : 'text-amber-700'}>{p.signed_at ? `signed ${p.signed_at_iso}` : 'not signed yet'}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {result.proof && (
             <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
