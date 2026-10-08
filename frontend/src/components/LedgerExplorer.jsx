@@ -19,6 +19,7 @@ import { buildCertificate, lineage } from '../lib/chain';
 import { addIdentity, getIdentities, getMeta, removeIdentity } from '../lib/localMeta';
 import PulsarGlassSegmented from './PulsarGlassSegmented';
 import AgreementsPanel from './AgreementsPanel';
+import { downloadCertificatePdf } from '../lib/certificatePdf';
 
 const HEX64 = /^[0-9a-f]{64}$/i;
 
@@ -506,6 +507,13 @@ export default function LedgerExplorer() {
               >
                 <Download className="w-3 h-3" />
                 <span>Certificate</span>
+              </button>
+              <button
+                onClick={() => downloadCertificatePdf(certificateOf(selectedProof), `notary-certificate-${selectedProof.proof_pda.slice(0, 8)}.pdf`)}
+                className="cal-btn-secondary px-3.5 py-2 text-xs rounded-lg cursor-pointer flex items-center space-x-1.5"
+              >
+                <Download className="w-3 h-3" />
+                <span>PDF</span>
               </button>
               <button
                 onClick={() => setSelectedProof(null)}

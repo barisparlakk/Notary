@@ -5,10 +5,12 @@ import { sha256Hex } from '../lib/chain';
 import { API_URL } from '../lib/config';
 import { getMeta } from '../lib/localMeta';
 import { getDemoParties, getDemoSample } from '../lib/demoParties';
+import { buildAgreementCertificate } from '../lib/chain';
+import { downloadCertificatePdf } from '../lib/certificatePdf';
 
 // Ledger > Agreements: bir cüzdanın taraf olduğu sözleşmeler. İmzalamadan önce aynı dosya yüklenip hash'i doğrulanır.
 export default function AgreementsPanel({ onLoaded }) {
-  const { chain, signer, isDemo, cluster } = useNotary();
+  const { chain, signer, isDemo, cluster, programId } = useNotary();
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -127,6 +129,14 @@ export default function AgreementsPanel({ onLoaded }) {
             <div className="flex flex-wrap justify-end gap-2 pt-2">
               <button onClick={() => copy(`${window.location.origin}/?tab=verify&pda=${selected.agreement_pda}`, 'link')} className="cal-btn-secondary px-3.5 py-2 text-xs rounded-lg flex items-center space-x-1.5">
                 {copied === 'link' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}<span>Copy verify link</span>
+              </button>
+              <button
+                onClick={() => downloadCertificatePdf(
+                  buildAgreementCertificate({ agreementPda: selected.agreement_pda, agreement: selected, txSignature: getMeta(selected.agreement_pda)?.tx_signature, programId, cluster }),
+                  `notary-agreement-${selected.agreement_pda.slice(0, 8)}.pdf`)}
+                className="cal-btn-secondary px-3.5 py-2 text-xs rounded-lg flex items-center space-x-1.5"
+              >
+                <span>Certificate PDF</span>
               </button>
               {!isDemo && (
                 <a href={`https://explorer.solana.com/address/${selected.agreement_pda}?cluster=${cluster}`} target="_blank" rel="noopener noreferrer"

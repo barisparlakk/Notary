@@ -23,6 +23,7 @@ import { useNotary, shortKey } from '../lib/notary';
 import { buildCertificate, deriveProofPda, hexToBytes, sha256Hex, MAX_PARENTS } from '../lib/chain';
 import { getMeta, setMeta } from '../lib/localMeta';
 import { API_URL } from '../lib/config';
+import { downloadCertificatePdf } from '../lib/certificatePdf';
 import PulsarGlassSegmented from './PulsarGlassSegmented';
 import AgreementStudio from './AgreementStudio';
 
@@ -506,6 +507,14 @@ export default function NotarizeStudio({ onProofCreated }) {
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Download certificate</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadCertificatePdf(result.certificate, `notary-certificate-${result.proof_pda.slice(0, 8)}.pdf`)}
+                className="cal-btn-secondary py-2 px-4 text-xs rounded-lg font-mono flex items-center space-x-1.5"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>PDF</span>
               </button>
             </div>
           </div>

@@ -47,6 +47,10 @@ export default function App() {
               <span>Stack: Anchor • Solana • React • Python agents</span>
             </div>
           </div>
+          <p className="mt-4 text-[11px] leading-relaxed text-gray-500 max-w-3xl">
+            Notary records timestamped integrity proofs on Solana. A proof shows that a wallet recorded this exact file at a given time and that it has not
+            changed since. It is not a qualified electronic signature under eIDAS and does not by itself prove who controls a wallet.
+          </p>
         </div>
       </footer>
     </div>

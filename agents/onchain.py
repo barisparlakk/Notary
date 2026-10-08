@@ -26,6 +26,8 @@ KEYS_DIR = Path(__file__).parent / "keys"
 # Yeni işlem "confirmed" olur olmaz okunabilmeli; Solana'nın varsayılanı "finalized" (~13 sn gecikme).
 COMMITMENT = "confirmed"
 
+CERT_NOTICE = "Timestamped integrity proof recorded on Solana. Not a qualified electronic signature (eIDAS); does not by itself prove the identity of a signer."
+
 MAX_PARENTS = 4
 MAX_PARTIES = 4
 NOTARIZE_DISC = hashlib.sha256(b"global:notarize").digest()[:8]
@@ -462,6 +464,7 @@ def build_certificate(proof_pda, proof, tx_signature, program_id=None, cluster="
     program_id = program_id or PROGRAM_ID
     return {
         "version": "notary.cert.v1",
+        "notice": CERT_NOTICE,
         "cluster": cluster,
         "program_id": str(program_id),
         "proof_pda": str(proof_pda),

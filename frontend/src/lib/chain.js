@@ -21,6 +21,8 @@ export const AGREEMENT_DISC = Buffer.from('53d4056ee1f9c554', 'hex');
 
 export class ChainError extends Error {}
 
+export const CERT_NOTICE = 'Timestamped integrity proof recorded on Solana. Not a qualified electronic signature (eIDAS); does not by itself prove the identity of a signer.';
+
 // ------------------------------------------------------------------ yardımcılar
 export const hexToBytes = (hex) => Uint8Array.from(Buffer.from(hex, 'hex'));
 export const bytesToHex = (bytes) => Buffer.from(bytes).toString('hex');
@@ -178,6 +180,7 @@ export function buildCoSignInstruction({ programId, signer, agreement }) {
 export function buildCertificate({ proofPda, proof, txSignature, programId, cluster = 'devnet', verifyUrl }) {
   return {
     version: 'notary.cert.v1',
+    notice: CERT_NOTICE,
     cluster,
     program_id: pk(programId).toBase58(),
     proof_pda: String(proofPda),
@@ -194,6 +197,7 @@ export function buildCertificate({ proofPda, proof, txSignature, programId, clus
 export function buildAgreementCertificate({ agreementPda, agreement, txSignature, programId, cluster = 'devnet', verifyUrl }) {
   return {
     version: 'notary.agreement.v1',
+    notice: CERT_NOTICE,
     cluster,
     program_id: pk(programId).toBase58(),
     agreement_pda: String(agreementPda),

@@ -18,6 +18,7 @@
     "@solana/wallet-adapter-solflare": "^0.6.34",
     "@solana/web3.js": "^1.99.0",
     "buffer": "^6.0.3",
+    "jspdf": "^4.2.1",
     "lucide-react": "^1.16.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.8",

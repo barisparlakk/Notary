@@ -5,6 +5,7 @@ import { UploadCloud, Sparkles, Cpu, Check, Copy, Send, ArrowRight, ArrowUpRight
 import { useNotary, shortKey } from '../lib/notary';
 import { buildAgreementCertificate, MAX_PARTIES, sha256Hex, deriveAgreementPda, hexToBytes } from '../lib/chain';
 import { API_URL } from '../lib/config';
+import { downloadCertificatePdf } from '../lib/certificatePdf';
 import { getIdentities, setMeta } from '../lib/localMeta';
 import { addDemoParty, getDemoParties, saveDemoSample } from '../lib/demoParties';
 
@@ -297,6 +298,10 @@ export default function AgreementStudio() {
               </button>
               <button type="button" onClick={download} className="cal-btn-secondary py-2 px-4 text-xs rounded-lg font-mono flex items-center space-x-1.5">
                 <Download className="w-3.5 h-3.5" /><span>Download certificate</span>
+              </button>
+              <button type="button" onClick={() => downloadCertificatePdf(result.certificate, `notary-agreement-${result.agreement_pda.slice(0, 8)}.pdf`)}
+                className="cal-btn-secondary py-2 px-4 text-xs rounded-lg font-mono flex items-center space-x-1.5">
+                <Download className="w-3.5 h-3.5" /><span>PDF</span>
               </button>
             </div>
           </div>

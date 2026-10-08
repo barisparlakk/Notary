@@ -234,3 +234,30 @@ test('relayer bakiyesi bitmişse anlaşılır hata', async () => {
   const rpc = new chain.RpcChain({}, V.program_id);
   await assert.rejects(rpc.notarize({ signer: chain.newDemoSigner(), hashHex: 'ab'.repeat(32), relay: 'https://api.test' }), /out of funds/);
 });
+
+// ---------------------------------------------------------------- PDF sertifika ve hukuki not
+test('sertifikalar hukuki notu taşır', () => {
+  const proof = chain.decodeProof(Buffer.from(V.golden.proof_account_no_receiver_no_parents_hex, 'hex'));
+  const c = chain.buildCertificate({ proofPda: V.proof_pda, proof, txSignature: 'sig', programId: V.program_id, verifyUrl: 'x' });
+  assert.match(c.notice, /Not a qualified electronic signature/);
+  const ag = chain.decodeAgreement(Buffer.from(V.agreement.account_all_signed_hex, 'hex'));
+  const a = chain.buildAgreementCertificate({ agreementPda: V.agreement.agreement_pda, agreement: ag, txSignature: null, programId: V.program_id, verifyUrl: 'y' });
+  assert.equal(a.version, 'notary.agreement.v1');
+  assert.equal(a.complete, true);
+  assert.equal(a.parties.length, 3);
+  assert.match(a.notice, /eIDAS/);
+});
+
+test('PDF sertifika: geçerli bir PDF üretir (kayıt ve sözleşme)', async () => {
+  const { buildCertificatePdf } = await import('../src/lib/certificatePdf.js');
+  const proof = chain.decodeProof(Buffer.from(V.golden.proof_account_receiver_one_parent_hex, 'hex'));
+  const cert = chain.buildCertificate({ proofPda: V.proof_pda, proof, txSignature: 'sig', programId: V.program_id, verifyUrl: 'https://example.test/?pda=1' });
+  const ag = chain.decodeAgreement(Buffer.from(V.agreement.account_creator_signed_hex, 'hex'));
+  const agCert = chain.buildAgreementCertificate({ agreementPda: V.agreement.agreement_pda, agreement: ag, txSignature: 'sig', programId: V.program_id, verifyUrl: 'https://example.test/?pda=2' });
+  for (const c of [cert, agCert]) {
+    const blob = await buildCertificatePdf(c);
+    const bytes = Buffer.from(await blob.arrayBuffer());
+    assert.equal(bytes.subarray(0, 5).toString(), '%PDF-');
+    assert.ok(bytes.length > 4000, 'QR görseli ve metin içerir');
+  }
+});
