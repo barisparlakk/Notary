@@ -1,9 +1,10 @@
-# Gönderen agent (agent_a): rapor PDF'i üretir, notarize eder, dosya + proof_id'yi ortak klasöre bırakır.
+# Gönderen agent (agent_a): rapor PDF'i üretir, hash'ini zincire (PDA) kaydeder, dosya + sertifikayı ortak klasöre bırakır.
+# Kimlik = agent'ın Solana anahtarı; "agent_a" yalnızca etiket. Backend gerekmez.
 import json
 from pathlib import Path
 
-import client
 import llm
+import onchain
 
 SHARED_DIR = Path(__file__).parent / "shared"
 SENDER_ID = "agent_a"
@@ -13,14 +14,14 @@ HANDOFF_NAME = "handoff.json"
 FALLBACK_REPORT = (
     "Quarterly Integrity Report\n\n"
     "This report documents the verified state of the delivery pipeline.\n"
-    "All artifacts exchanged between agents are hashed with SHA-256,\n"
-    "signed with ed25519 and anchored on Solana devnet.\n"
+    "Every artifact exchanged between agents is hashed with SHA-256 and anchored\n"
+    "in a program-derived account on Solana.\n"
 )
 
 NOTARIZE_TOOL = {
     "name": "notarize",
-    "description": "Notarize a file from the outbox: hashes it, signs it as the sender and records the proof. "
-                   "Returns proof_id, document_hash, tx_signature and explorer_url.",
+    "description": "Anchor a file from the outbox on Solana as the sender. The file is hashed and a proof account (PDA) "
+                   "is created. Returns proof_pda, tx_signature and document_hash.",
     "input_schema": {
         "type": "object",
         "properties": {"file_name": {"type": "string", "description": "File name inside the outbox directory"}},
@@ -57,16 +58,19 @@ def generate_report_text(topic, llm_client=None):
     )
 
 
-def run(topic="", receiver=RECEIVER_ID, outbox=SHARED_DIR, use_llm=False, api_url=None, keys_dir=None, log=print):
-    """Raporu üretir, notarize eder, handoff.json yazar. -> {"file", "proof", "handoff"}"""
+def run(topic="", receiver=None, outbox=SHARED_DIR, use_llm=False, rpc=None, program_id=None,
+        keys_dir=None, funder=None, log=print):
+    """Raporu üretir, zincire kaydeder, handoff.json + certificate.json yazar.
+    receiver: alıcının public key'i (opsiyonel). -> {"file", "proof", "handoff", "certificate"}"""
     outbox = Path(outbox)
-    kw = {"api_url": api_url}
-    if keys_dir is not None:
-        kw["keys_dir"] = keys_dir
+    rpc = rpc or onchain.Rpc()
+    program_id = program_id or onchain.PROGRAM_ID
+    kd = {"keys_dir": keys_dir} if keys_dir is not None else {}
     llm_client = llm.get_client() if use_llm else None
 
-    client.ensure_agent(SENDER_ID, **kw)
-    log(f"[{SENDER_ID}] anahtar hazır ve backend'e kayıtlı")
+    kp = onchain.agent_keypair(SENDER_ID, **kd)
+    onchain.ensure_funded(rpc, kp, funder)
+    log(f"[{SENDER_ID}] kimlik: {kp.pubkey()}")
 
     text = generate_report_text(topic, llm_client)
     pdf = write_pdf(text, outbox / "report.pdf")
@@ -76,27 +80,31 @@ def run(topic="", receiver=RECEIVER_ID, outbox=SHARED_DIR, use_llm=False, api_ur
         target = (outbox / file_name).resolve()
         if target.parent != outbox.resolve() or not target.is_file():
             raise ValueError("file_name outbox içinde olmalı")
-        return client.notarize(target, SENDER_ID, receiver, **kw)
+        return onchain.notarize(rpc, kp, onchain.sha256_bytes(target.read_bytes()), receiver=receiver, program_id=program_id)
 
     if llm_client is None:
         proof = notarize_tool(pdf.name)
     else:
         _, calls = llm.run_tool_loop(
             llm_client,
-            f"You are {SENDER_ID}. Notarize the finished report with the notarize tool, then confirm briefly.",
-            f"The report is saved as {pdf.name}. Notarize it.",
+            f"You are {SENDER_ID}. Anchor the finished report with the notarize tool, then confirm briefly.",
+            f"The report is saved as {pdf.name}. Anchor it.",
             [NOTARIZE_TOOL],
             {"notarize": notarize_tool},
         )
-        ok = [c for c in calls if c["name"] == "notarize" and "proof_id" in c["output"]]
+        ok = [c for c in calls if c["name"] == "notarize" and "proof_pda" in c["output"]]
         if not ok:
             raise RuntimeError("LLM notarize tool'unu başarıyla çağırmadı")
         proof = ok[-1]["output"]
-    log(f"[{SENDER_ID}] notarize edildi: {proof['proof_id']}")
+    log(f"[{SENDER_ID}] zincire kaydedildi: {proof['proof_pda']}")
 
-    handoff = {"file": pdf.name, "proof_id": proof["proof_id"], "sender": SENDER_ID, "receiver": receiver}
+    certificate = onchain.build_certificate(proof["proof_pda"], onchain.get_proof(rpc, proof["proof_pda"]),
+                                            proof["tx_signature"], program_id)
+    handoff = {"file": pdf.name, "proof_pda": proof["proof_pda"], "signer": proof["signer"],
+               "receiver": str(receiver) if receiver else None, "tx_signature": proof["tx_signature"]}
     (outbox / HANDOFF_NAME).write_text(json.dumps(handoff, indent=2))
-    return {"file": pdf, "proof": proof, "handoff": handoff}
+    (outbox / "certificate.json").write_text(json.dumps(certificate, indent=2))
+    return {"file": pdf, "proof": proof, "handoff": handoff, "certificate": certificate}
 
 
 if __name__ == "__main__":
@@ -105,5 +113,6 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--topic", default="")
     ap.add_argument("--llm", action="store_true", help="LLM function calling kullan (varsayılan: yerel Ollama; bkz. llm.py)")
+    ap.add_argument("--funder", default=None, help="fon cüzdanı (Solana CLI JSON)")
     a = ap.parse_args()
-    run(a.topic, use_llm=a.llm)
+    run(a.topic, use_llm=a.llm, funder=onchain.load_keypair(a.funder) if a.funder else None)

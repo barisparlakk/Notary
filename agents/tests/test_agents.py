@@ -1,27 +1,43 @@
-# Sender/Receiver agent'lar: mock sunucuya karşı, LLM'siz ve sahte LLM istemcisiyle.
+# Sender/Receiver agent'lar (v2): sahte zincire karşı, LLM'siz ve sahte LLM istemcisiyle. API yok.
+import json
+
 import pytest
 
+import demo_v2
 import llm
+import onchain
 import receiver_agent
 import sender_agent
 
+quiet = {"log": lambda *_: None}
 
-def test_sender_receiver_no_llm(api_url, tmp_path):
-    keys, box = tmp_path / "keys", tmp_path / "box"
-    out = sender_agent.run("Test", outbox=box, api_url=api_url, keys_dir=keys, log=lambda *_: None)
+
+def test_sender_receiver_no_llm(chain_rpc, tmp_path):
+    rpc, program = chain_rpc
+    out = sender_agent.run("Test", outbox=tmp_path / "box", rpc=rpc, program_id=program, keys_dir=tmp_path / "k", **quiet)
     assert out["file"].read_bytes().startswith(b"%PDF")
-    assert (box / "handoff.json").exists()
-    res = receiver_agent.receive_from_inbox(box, api_url=api_url, log=lambda *_: None)
+    assert (tmp_path / "box" / "handoff.json").exists() and (tmp_path / "box" / "certificate.json").exists()
+    assert out["certificate"]["version"] == "notary.cert.v1"
+    res = receiver_agent.receive_from_inbox(tmp_path / "box", rpc=rpc, program_id=program, **quiet)
     assert res["status"] == "VERIFIED"
     assert res["original_hash"] == out["proof"]["document_hash"]
 
 
-def test_receiver_detects_tampering(api_url, tmp_path):
+def test_receiver_detects_tampering(chain_rpc, tmp_path):
+    rpc, program = chain_rpc
     box = tmp_path / "box"
-    out = sender_agent.run("Test", outbox=box, api_url=api_url, keys_dir=tmp_path / "keys", log=lambda *_: None)
+    out = sender_agent.run("Test", outbox=box, rpc=rpc, program_id=program, keys_dir=tmp_path / "k", **quiet)
     out["file"].write_bytes(out["file"].read_bytes() + b"\x00")
-    res = receiver_agent.receive_from_inbox(box, api_url=api_url, log=lambda *_: None)
-    assert res["status"] == "INVALID"
+    assert receiver_agent.receive_from_inbox(box, rpc=rpc, program_id=program, **quiet)["status"] == "INVALID"
+
+
+def test_sender_funds_itself_from_funder(chain_rpc, tmp_path):
+    rpc, program = chain_rpc
+    funder = onchain.Keypair()
+    rpc.airdrop(funder.pubkey(), 1)
+    out = sender_agent.run("T", outbox=tmp_path / "box", rpc=rpc, program_id=program, keys_dir=tmp_path / "k",
+                           funder=funder, **quiet)
+    assert rpc.balance(onchain.Pubkey.from_string(out["proof"]["signer"])) >= 20_000_000
 
 
 # --- sahte Anthropic istemcisi: önce tool çağırır, sonra metinle bitirir ---
@@ -50,27 +66,30 @@ class FakeAnthropic:
         return _Resp([_Block(type="text", text="done")], "end_turn")
 
 
-def test_sender_llm_mode(api_url, tmp_path, monkeypatch):
+def test_sender_llm_mode(chain_rpc, tmp_path, monkeypatch):
+    rpc, program = chain_rpc
     monkeypatch.setattr(llm, "get_client", lambda: FakeAnthropic("notarize", {"file_name": "report.pdf"}))
-    out = sender_agent.run("T", outbox=tmp_path / "box", use_llm=True, api_url=api_url,
-                           keys_dir=tmp_path / "keys", log=lambda *_: None)
-    assert out["proof"]["proof_id"].startswith("proof_")
+    out = sender_agent.run("T", outbox=tmp_path / "box", use_llm=True, rpc=rpc, program_id=program,
+                           keys_dir=tmp_path / "k", **quiet)
+    assert onchain.get_proof(rpc, out["proof"]["proof_pda"])["signer"] == out["proof"]["signer"]
 
 
-def test_receiver_llm_mode(api_url, tmp_path, monkeypatch):
+def test_receiver_llm_mode(chain_rpc, tmp_path, monkeypatch):
+    rpc, program = chain_rpc
     box = tmp_path / "box"
-    out = sender_agent.run("T", outbox=box, api_url=api_url, keys_dir=tmp_path / "keys", log=lambda *_: None)
-    fake = FakeAnthropic("verify", {"file_name": "report.pdf", "proof_id": out["proof"]["proof_id"]})
+    out = sender_agent.run("T", outbox=box, rpc=rpc, program_id=program, keys_dir=tmp_path / "k", **quiet)
+    fake = FakeAnthropic("verify", {"file_name": "report.pdf", "proof_pda": out["proof"]["proof_pda"]})
     monkeypatch.setattr(llm, "get_client", lambda: fake)
-    res = receiver_agent.receive_from_inbox(box, use_llm=True, api_url=api_url, log=lambda *_: None)
+    res = receiver_agent.receive_from_inbox(box, use_llm=True, rpc=rpc, program_id=program, **quiet)
     assert res["status"] == "VERIFIED" and res["summary"] == "done"
 
 
-def test_llm_tool_cannot_escape_outbox(api_url, tmp_path, monkeypatch):
+def test_llm_tool_cannot_escape_outbox(chain_rpc, tmp_path, monkeypatch):
+    rpc, program = chain_rpc
     monkeypatch.setattr(llm, "get_client", lambda: FakeAnthropic("notarize", {"file_name": "../../etc/hosts"}))
     with pytest.raises(RuntimeError):  # tool hata döner -> başarılı çağrı yok
-        sender_agent.run("T", outbox=tmp_path / "box", use_llm=True, api_url=api_url,
-                         keys_dir=tmp_path / "keys", log=lambda *_: None)
+        sender_agent.run("T", outbox=tmp_path / "box", use_llm=True, rpc=rpc, program_id=program,
+                         keys_dir=tmp_path / "k", **quiet)
 
 
 def test_anthropic_provider_requires_key(monkeypatch):
@@ -90,7 +109,6 @@ def test_ollama_provider_gives_helpful_error_when_down(monkeypatch):
 # --- OpenAI uyumlu sahte HTTP sunucusu (Ollama/Groq biçimi) ---
 @pytest.fixture
 def openai_server():
-    import json
     import threading
     from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -131,32 +149,29 @@ def _use_openai(monkeypatch, state):
     monkeypatch.setattr(llm, "BASE_URL", state["url"])
 
 
-def test_openai_compat_sender_and_receiver(api_url, tmp_path, monkeypatch, openai_server):
+def test_openai_compat_sender_and_receiver(chain_rpc, tmp_path, monkeypatch, openai_server):
+    rpc, program = chain_rpc
     _use_openai(monkeypatch, openai_server)
     openai_server.update(tool="notarize", args={"file_name": "report.pdf"})
     box = tmp_path / "box"
-    out = sender_agent.run("T", outbox=box, use_llm=True, api_url=api_url, keys_dir=tmp_path / "k",
-                           log=lambda *_: None)
-    assert out["proof"]["proof_id"].startswith("proof_")
-    # tool'lar OpenAI biçimine çevrilmiş olmalı
-    assert openai_server["bodies"][1]["tools"][0]["function"]["name"] == "notarize"
+    out = sender_agent.run("T", outbox=box, use_llm=True, rpc=rpc, program_id=program, keys_dir=tmp_path / "k", **quiet)
+    assert out["proof"]["proof_pda"]
+    assert openai_server["bodies"][1]["tools"][0]["function"]["name"] == "notarize"  # OpenAI biçimine çevrilmiş
 
-    openai_server.update(tool="verify", turn=0,
-                         args={"file_name": "report.pdf", "proof_id": out["proof"]["proof_id"]})
-    res = receiver_agent.receive_from_inbox(box, use_llm=True, api_url=api_url, log=lambda *_: None)
+    openai_server.update(tool="verify", turn=0, args={"file_name": "report.pdf", "proof_pda": out["proof"]["proof_pda"]})
+    res = receiver_agent.receive_from_inbox(box, use_llm=True, rpc=rpc, program_id=program, **quiet)
     assert res["status"] == "VERIFIED" and res["summary"] == "done"
 
 
-def test_openai_compat_bad_tool_arguments_do_not_crash(api_url, tmp_path, monkeypatch, openai_server):
+def test_openai_compat_bad_tool_arguments_do_not_crash(chain_rpc, tmp_path, monkeypatch, openai_server):
+    rpc, program = chain_rpc
     _use_openai(monkeypatch, openai_server)
-    openai_server.update(tool="notarize", args="not-json-object")  # arguments = '"not-json-object"'
-    with pytest.raises(RuntimeError):  # başarılı notarize çağrısı yok
-        sender_agent.run("T", outbox=tmp_path / "box", use_llm=True, api_url=api_url,
-                         keys_dir=tmp_path / "k", log=lambda *_: None)
+    openai_server.update(tool="notarize", args="not-json-object")
+    with pytest.raises(RuntimeError):
+        sender_agent.run("T", outbox=tmp_path / "box", use_llm=True, rpc=rpc, program_id=program,
+                         keys_dir=tmp_path / "k", **quiet)
 
 
-def test_demo_scenario_passes(monkeypatch, capsys):
-    import demo
-
-    monkeypatch.setattr("sys.argv", ["demo.py", "--mock", "--delay", "0", "--chain"])
-    assert demo.main() == 0
+def test_demo_v2_with_chain_passes(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["demo_v2.py", "--mock", "--delay", "0", "--chain"])
+    assert demo_v2.main() == 0

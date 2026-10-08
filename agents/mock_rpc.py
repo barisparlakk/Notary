@@ -31,6 +31,17 @@ class MockChain:
         if len(msg.instructions) != 1:
             raise ValueError("tek talimat bekleniyor")
         ix = msg.instructions[0]
+        if msg.account_keys[ix.program_id_index] == SYSTEM_PROGRAM_ID:  # sistem transferi (fon cüzdanı akışı)
+            data = bytes(ix.data)
+            if struct.unpack_from("<I", data)[0] != 2:
+                raise ValueError("desteklenmeyen sistem talimatı")
+            src, dst = (str(msg.account_keys[i]) for i in ix.accounts[:2])
+            (lamports,) = struct.unpack_from("<Q", data, 4)
+            if self.balances.get(src, 0) < lamports:
+                raise ValueError("insufficient funds")
+            self.balances[src] -= lamports
+            self.balances[dst] = self.balances.get(dst, 0) + lamports
+            return
         if msg.account_keys[ix.program_id_index] != self.program_id:
             raise ValueError("bilinmeyen program")
         data = bytes(ix.data)

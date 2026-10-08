@@ -1,70 +1,22 @@
-# Zincir provenance: Research -> Analysis -> Decision. Her çıktı notarize edilir; bağımlılıklar yerel
-# bir ledger'da (provenance.json) tutulur. "Bu karar hangi dosyalara dayandı?" sorgusu: explain().
-# Agent ID'leri sözleşmeye göre agent_a / agent_b; rol (research/analysis/decision) ledger'da saklanır.
+# Zincir provenance: Research -> Analysis -> Decision. Her çıktı zincire kaydedilir ve bir öncekinin hash'ini `parents`
+# olarak taşır; "bu karar hangi belgelere dayandı?" sorusu doğrudan zincirden yanıtlanır (onchain.lineage).
+# Yerel `chain.json` yalnızca dosyaların nerede durduğunu gösterir (doğruluk kaynağı değil).
 import json
 from pathlib import Path
 
-import client
 import llm
+import onchain
 from sender_agent import SHARED_DIR, write_pdf
 
-LEDGER_PATH = Path(__file__).parent / "provenance.json"
 CHAIN_DIR = SHARED_DIR / "chain"
+MANIFEST = "chain.json"
 
-# (rol, gönderen, alıcı)
-STAGES = [("research", "agent_a", "agent_b"), ("analysis", "agent_b", "agent_a"), ("decision", "agent_a", "agent_b")]
+# (rol, agent etiketi). Kimlik her agent'ın Solana anahtarıdır.
+STAGES = [("research", "agent_a"), ("analysis", "agent_b"), ("decision", "agent_a")]
 
 
 class ChainError(Exception):
     pass
-
-
-class Ledger:
-    def __init__(self, path=LEDGER_PATH):
-        self.path = Path(path)
-        self.data = json.loads(self.path.read_text()) if self.path.exists() else {"artifacts": {}}
-
-    def add(self, proof, file_path, role, depends_on=(), text=""):
-        self.data["artifacts"][proof["proof_id"]] = {
-            "proof_id": proof["proof_id"],
-            "role": role,
-            "file": str(Path(file_path).resolve()),
-            "document_hash": proof["document_hash"],
-            "sender": proof["sender"],
-            "receiver": proof["receiver"],
-            "tx_signature": proof["tx_signature"],
-            "explorer_url": proof["explorer_url"],
-            "timestamp": proof["timestamp"],
-            "depends_on": list(depends_on),
-            "text": text,
-        }
-        self.path.write_text(json.dumps(self.data, indent=2))
-
-    def get(self, proof_id):
-        try:
-            return self.data["artifacts"][proof_id]
-        except KeyError:
-            raise ChainError(f"'{proof_id}' ledger'da yok") from None
-
-    def latest(self, role):
-        found = [a for a in self.data["artifacts"].values() if a["role"] == role]
-        if not found:
-            raise ChainError(f"ledger'da '{role}' kaydı yok")
-        return found[-1]["proof_id"]  # ledger ekleme sırasını korur
-
-    def lineage(self, proof_id):
-        """proof_id'nin dayandığı tüm atalar (kökler önce, tekrarsız). proof_id'nin kendisi dahil değil."""
-        order, seen = [], set()
-
-        def visit(pid):
-            for dep in self.get(pid)["depends_on"]:
-                if dep not in seen:
-                    seen.add(dep)
-                    visit(dep)
-                    order.append(dep)
-
-        visit(proof_id)
-        return order
 
 
 STAGE_PROMPTS = {
@@ -82,57 +34,74 @@ def _stage_text(role, topic, upstream, based_on, llm_client):
         )
     else:
         body = f"{role.capitalize()}: {topic}\n" + (f"Builds on the previous {upstream.splitlines()[0]}\n" if upstream else "")
-    refs = "\n".join(f"Based on notarized proof: {p}" for p in based_on)
+    refs = "\n".join(f"Based on notarized proof account: {p}" for p in based_on)
     return body + ("\n\n" + refs if refs else "")
 
 
-def run_chain(topic, workdir=CHAIN_DIR, ledger=None, use_llm=False, api_url=None, keys_dir=None, log=print):
-    """Üç aşamalı zinciri çalıştırır. Her aşama, bir önceki dosyayı VERIFIED görmeden başlamaz.
-    -> {"decision": proof_id, "proofs": {rol: proof}}"""
+def run_chain(topic, workdir=CHAIN_DIR, use_llm=False, rpc=None, program_id=None, keys_dir=None, funder=None, log=print):
+    """Üç aşamalı zinciri çalıştırır. Her aşama, bir önceki dosyayı zincirden VERIFIED görmeden başlamaz.
+    -> {"decision": proof_pda, "proofs": {rol: proof}, "manifest": [...]}"""
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
-    ledger = ledger or Ledger()
-    kw = {"api_url": api_url}
-    if keys_dir is not None:
-        kw["keys_dir"] = keys_dir
+    rpc = rpc or onchain.Rpc()
+    program_id = program_id or onchain.PROGRAM_ID
+    kd = {"keys_dir": keys_dir} if keys_dir is not None else {}
     llm_client = llm.get_client() if use_llm else None
-    for agent in ("agent_a", "agent_b"):
-        client.ensure_agent(agent, **kw)
 
-    proofs, prev = {}, None
-    for i, (role, sender, receiver) in enumerate(STAGES, 1):
+    keys = {}
+    for _, agent in STAGES:
+        if agent not in keys:
+            keys[agent] = onchain.agent_keypair(agent, **kd)
+            onchain.ensure_funded(rpc, keys[agent], funder)
+
+    manifest, proofs, prev = [], {}, None
+    for i, (role, agent) in enumerate(STAGES, 1):
         based_on = []
+        upstream_text = ""
         if prev:
-            prev_entry = ledger.get(prev["proof_id"])
-            res = client.verify(prev_entry["file"], prev["proof_id"], api_url=api_url)
+            res = onchain.verify(rpc, (workdir / prev["file"]).read_bytes(), pda=prev["proof_pda"], program_id=program_id)
             if res["status"] != "VERIFIED":
-                raise ChainError(f"{sender}: '{prev_entry['role']}' girdisi doğrulanamadı, zincir durduruldu")
-            log(f"[{sender}] girdi doğrulandı ({prev_entry['role']}: VERIFIED)")
-            based_on = [prev["proof_id"]]
-        text = _stage_text(role, topic, prev_entry["text"] if prev else "", based_on, llm_client)
+                raise ChainError(f"{agent}: '{prev['role']}' girdisi zincirde doğrulanamadı ({res['status']}), zincir durduruldu")
+            log(f"[{agent}] girdi zincirden doğrulandı ({prev['role']}: VERIFIED)")
+            based_on = [prev["proof_pda"]]
+            upstream_text = (workdir / prev["file"]).with_suffix(".txt").read_text()
+        text = _stage_text(role, topic, upstream_text, based_on, llm_client)
         pdf = write_pdf(text, workdir / f"{i:02d}_{role}.pdf")
-        proof = client.notarize(pdf, sender, receiver, **kw)
-        ledger.add(proof, pdf, role, depends_on=based_on, text=text)
-        log(f"[{sender}] {role} notarize edildi: {proof['proof_id']}")
+        pdf.with_suffix(".txt").write_text(text)
+        h = onchain.sha256_bytes(pdf.read_bytes())
+        parents = [bytes.fromhex(prev["document_hash"])] if prev else []
+        proof = onchain.notarize(rpc, keys[agent], h, parents=parents, program_id=program_id)
+        log(f"[{agent}] {role} zincire kaydedildi: {proof['proof_pda']}")
+        entry = {"role": role, "agent": agent, "file": pdf.name, "proof_pda": proof["proof_pda"], "document_hash": h.hex()}
+        manifest.append(entry)
         proofs[role] = proof
-        prev = proof
-    return {"decision": proofs["decision"]["proof_id"], "proofs": proofs}
+        prev = entry
+    (workdir / MANIFEST).write_text(json.dumps(manifest, indent=2))
+    return {"decision": proofs["decision"]["proof_pda"], "proofs": proofs, "manifest": manifest}
 
 
-def explain(proof_id, ledger=None, api_url=None, check_files=True):
-    """'Bu karar hangi dosyalara dayandı?' -> atalar listesi (kökler önce), her biri için dosya bütünlüğü.
-    Her kayıt: ledger alanları + "status" (VERIFIED/INVALID/MISSING/UNCHECKED)."""
-    ledger = ledger or Ledger()
+def explain(rpc, proof_pda, workdir=CHAIN_DIR, program_id=None, check_files=True):
+    """'Bu karar hangi dosyalara dayandı?' Atalar zincirden okunur (kökler önce). Dosya bütünlüğü için yerel dosya, zincirdeki
+    hash ile karşılaştırılır. Her kayıt: lineage alanları + rol + "status" (VERIFIED / INVALID / MISSING / NO_PROOF / UNCHECKED)."""
+    workdir = Path(workdir)
+    program_id = program_id or onchain.PROGRAM_ID
+    manifest = json.loads((workdir / MANIFEST).read_text()) if (workdir / MANIFEST).exists() else []
+    by_hash = {m["document_hash"]: m for m in manifest}
     rows = []
-    for pid in ledger.lineage(proof_id):
-        entry = dict(ledger.get(pid))
-        if not check_files:
-            entry["status"] = "UNCHECKED"
-        elif not Path(entry["file"]).is_file():
-            entry["status"] = "MISSING"
+    for node in onchain.lineage(rpc, proof_pda, program_id):
+        row = dict(node)
+        loc = by_hash.get(node["document_hash"])
+        row["role"] = loc["role"] if loc else "?"
+        if node.get("missing"):
+            row["status"] = "NO_PROOF"
+        elif not check_files:
+            row["status"] = "UNCHECKED"
+        elif not loc or not (workdir / loc["file"]).is_file():
+            row["status"] = "MISSING"
         else:
-            entry["status"] = client.verify(entry["file"], pid, api_url=api_url)["status"]
-        rows.append(entry)
+            now = onchain.sha256_bytes((workdir / loc["file"]).read_bytes()).hex()
+            row["status"] = "VERIFIED" if now == node["document_hash"] else "INVALID"
+        rows.append(row)
     return rows
 
 
@@ -144,14 +113,14 @@ if __name__ == "__main__":
     r = sub.add_parser("run")
     r.add_argument("--topic", default="Should we adopt notarized agent handoffs?")
     r.add_argument("--llm", action="store_true")
+    r.add_argument("--funder", default=None)
     w = sub.add_parser("why", help="Bir karar hangi dosyalara dayandı?")
-    w.add_argument("proof_id", nargs="?", help="boşsa son 'decision'")
+    w.add_argument("proof_pda", nargs="?", help="boşsa son çalıştırmanın decision'ı")
     a = ap.parse_args()
     if a.cmd == "run":
-        out = run_chain(a.topic, use_llm=a.llm)
+        out = run_chain(a.topic, use_llm=a.llm, funder=onchain.load_keypair(a.funder) if a.funder else None)
         print("decision:", out["decision"])
     else:
-        led = Ledger()
-        pid = a.proof_id or led.latest("decision")
-        for row in explain(pid, led):
-            print(f"{row['status']:9} {row['role']:9} {row['proof_id']}  {row['file']}")
+        pda = a.proof_pda or json.loads((CHAIN_DIR / MANIFEST).read_text())[-1]["proof_pda"]
+        for row in explain(onchain.Rpc(), pda):
+            print(f"{row['status']:9} {row['role']:9} {row['document_hash'][:16]}  {row.get('proof_pda')}")

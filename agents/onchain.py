@@ -216,6 +216,16 @@ def fund_from(rpc, funder: Keypair, to, lamports: int):
     return sig
 
 
+def ensure_funded(rpc, kp: Keypair, funder: Keypair = None, min_lamports=5_000_000, amount=20_000_000):
+    """Bakiye düşükse fon cüzdanından transfer eder (yoksa airdrop dener). Devnet'te airdrop sık sınırlanır; funder tercih edin."""
+    if rpc.balance(kp.pubkey()) >= min_lamports:
+        return
+    if funder is not None:
+        fund_from(rpc, funder, kp.pubkey(), amount)
+    else:
+        rpc.airdrop(kp.pubkey(), 1)
+
+
 def get_proof(rpc, pda):
     """PDA adresinden çözümlenmiş Proof ya da None."""
     acc = rpc.get_account(pda)
