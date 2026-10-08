@@ -3,7 +3,7 @@ import Navbar from './components/Navbar';
 import Check from './components/Check';
 import Record from './components/Record';
 import Agreements from './components/Agreements';
-import LedgerExplorer from './components/LedgerExplorer';
+import Records from './components/Records';
 
 // Eski bağlantılar (daha önce verilmiş QR ve sertifikalar) çalışmaya devam eder: ?tab=verify&pda=...
 const LEGACY = { verify: 'check', pipeline: 'check', notarize: 'record', ledger: 'records' };
@@ -26,7 +26,7 @@ export default function App() {
         {activeTab === 'check' && <Check initialPda={initialPda} />}
         {activeTab === 'record' && <Record />}
         {activeTab === 'agreements' && <Agreements />}
-        {activeTab === 'records' && <LedgerExplorer />}
+        {activeTab === 'records' && <Records />}
       </main>
 
       <footer className="border-t border-rule py-8 mt-16" role="contentinfo">
