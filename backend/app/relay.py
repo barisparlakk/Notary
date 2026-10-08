@@ -2,7 +2,7 @@
 v2 relayer (CONTRACT.md v2, Bölüm 7): kullanıcının SOL'ü olmasa da `notarize` işlemini gönderir.
 
 Güvenlik: kayıt doğruluk kaynağı DEĞİLDİR; yalnızca ücreti öder. Bu yüzden yalnızca şu işlemleri imzalar:
-  - tek talimat, hedef program = PROGRAM_ID, talimat = notarize
+  - tek talimat, hedef program = PROGRAM_ID, talimat = notarize | create_agreement | co_sign
   - ücret ödeyen (fee payer) = relayer, `signer` = relayer DEĞİL (aksi halde relayer adına sahte kayıt atılırdı)
   - `signer`'ın imzası geçerli
 Hız sınırı IP başına dakikada RELAY_RATE_LIMIT (varsayılan 10). Vercel'de her örnek ayrı bellektir; örnekler arası
@@ -32,7 +32,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/relay", tags=["relay"])
 
 NOTARIZE_DISC = hashlib.sha256(b"global:notarize").digest()[:8]
+CREATE_AGREEMENT_DISC = hashlib.sha256(b"global:create_agreement").digest()[:8]
+CO_SIGN_DISC = hashlib.sha256(b"global:co_sign").digest()[:8]
 MAX_DATA_LEN = 8 + 32 + 33 + 4 + 32 * 4  # discriminator + hash + Some(receiver) + vec len + 4 parent
+MAX_AGREEMENT_DATA_LEN = 8 + 32 + 4 + 32 * 4  # discriminator + hash + vec len + 4 taraf
 CLUSTER = os.getenv("SOLANA_CLUSTER", "devnet")
 
 _hits: dict[str, deque] = defaultdict(deque)
@@ -92,37 +95,53 @@ class RelayRequest(BaseModel):
 
 class RelayResponse(BaseModel):
     tx_signature: str
-    proof_pda: str
+    proof_pda: str  # geriye uyumluluk: `account` ile aynı değer
+    account: str  # oluşan/etkilenen hesap (Proof ya da Agreement PDA'sı)
+    kind: str  # notarize | create_agreement | co_sign
     explorer_url: str
 
 
-def _validate(tx: Transaction, relayer: Pubkey, prog: Pubkey) -> Pubkey:
-    """Kuralları denetler; kayıt edilecek proof PDA'sını döner."""
+def _validate(tx: Transaction, relayer: Pubkey, prog: Pubkey) -> tuple[str, Pubkey]:
+    """Kuralları denetler; (talimat türü, hedef hesap) döner."""
     msg = tx.message
     keys = list(msg.account_keys)
     if keys[0] != relayer:
         raise HTTPException(400, "Fee payer must be the relayer (see GET /relay/info).")
     if msg.header.num_required_signatures != 2 or len(msg.instructions) != 1:
-        raise HTTPException(400, "Expected exactly one notarize instruction signed by the signer and the relayer.")
+        raise HTTPException(400, "Expected exactly one instruction signed by the signer and the relayer.")
     ix = msg.instructions[0]
     if keys[ix.program_id_index] != prog:
         raise HTTPException(400, "Instruction does not target the Notary program.")
     data = bytes(ix.data)
-    if data[:8] != NOTARIZE_DISC or len(data) > MAX_DATA_LEN:
-        raise HTTPException(400, "Only the notarize instruction is relayed.")
     accounts = [keys[i] for i in ix.accounts]
-    if len(accounts) != 4:
-        raise HTTPException(400, "notarize takes 4 accounts.")
-    signer, payer, proof, system = accounts
-    if payer != relayer:
-        raise HTTPException(400, "Payer account must be the relayer.")
+    required = keys[: msg.header.num_required_signatures]
+
+    if data[:8] == NOTARIZE_DISC and len(data) <= MAX_DATA_LEN:
+        kind = "notarize"
+    elif data[:8] == CREATE_AGREEMENT_DISC and len(data) <= MAX_AGREEMENT_DATA_LEN:
+        kind = "create_agreement"
+    elif data[:8] == CO_SIGN_DISC and len(data) == 8:
+        kind = "co_sign"
+    else:
+        raise HTTPException(400, "Only notarize, create_agreement and co_sign are relayed.")
+
+    if kind == "co_sign":
+        if len(accounts) != 2:
+            raise HTTPException(400, "co_sign takes 2 accounts.")
+        signer, target = accounts
+    else:
+        if len(accounts) != 4:
+            raise HTTPException(400, f"{kind} takes 4 accounts.")
+        signer, payer, target, system = accounts
+        if payer != relayer:
+            raise HTTPException(400, "Payer account must be the relayer.")
+        if system != SYSTEM_PROGRAM_ID:
+            raise HTTPException(400, "System program account mismatch.")
     if signer == relayer:
         raise HTTPException(400, "Signer must be your own wallet, not the relayer.")
-    if system != SYSTEM_PROGRAM_ID:
-        raise HTTPException(400, "System program account mismatch.")
-    if signer not in keys[: msg.header.num_required_signatures]:
+    if signer not in required:
         raise HTTPException(400, "Signer must sign the transaction.")
-    return proof
+    return kind, target
 
 
 def min_lamports() -> int:
@@ -167,7 +186,7 @@ async def relay(req: RelayRequest, request: Request) -> RelayResponse:
     if balance is not None and balance < min_lamports():
         logger.error("relayer balance low: %s lamports", balance)
         raise HTTPException(503, "Relayer is out of funds; try again later.")
-    proof_pda = _validate(tx, relayer_kp.pubkey(), Pubkey.from_string(program_id()))
+    kind, target = _validate(tx, relayer_kp.pubkey(), Pubkey.from_string(program_id()))
 
     tx.partial_sign([relayer_kp], tx.message.recent_blockhash)
     try:
@@ -190,9 +209,11 @@ async def relay(req: RelayRequest, request: Request) -> RelayResponse:
         logger.warning("relay failed: %s", exc)
         raise HTTPException(502, f"Solana RPC error: {exc}") from exc
 
-    logger.info("relayed notarize sig=%s pda=%s", sig, proof_pda)
+    logger.info("relayed %s sig=%s account=%s", kind, sig, target)
     return RelayResponse(
         tx_signature=sig,
-        proof_pda=str(proof_pda),
-        explorer_url=f"https://explorer.solana.com/address/{proof_pda}?cluster={CLUSTER}",
+        proof_pda=str(target),
+        account=str(target),
+        kind=kind,
+        explorer_url=f"https://explorer.solana.com/address/{target}?cluster={CLUSTER}",
     )

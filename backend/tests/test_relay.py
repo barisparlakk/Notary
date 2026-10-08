@@ -69,6 +69,70 @@ def post(client, tx):
     return client.post("/relay", json={"tx_base64": base64.b64encode(bytes(tx)).decode()})
 
 
+AG_DISC = hashlib.sha256(b"global:create_agreement").digest()[:8]
+COSIGN_DISC = hashlib.sha256(b"global:co_sign").digest()[:8]
+
+
+def agreement_tx(creator, parties, *, relayer=RELAYER.pubkey(), program=PROGRAM, sign=True):
+    h = hashlib.sha256(b"agreement").digest()
+    pda, _ = Pubkey.find_program_address([b"agreement", bytes(creator.pubkey()), h], program)
+    data = AG_DISC + h + struct.pack("<I", len(parties)) + b"".join(bytes(p) for p in parties)
+    ix = Instruction(program, data, [
+        AccountMeta(creator.pubkey(), True, False), AccountMeta(relayer, True, True),
+        AccountMeta(pda, False, True), AccountMeta(SYSTEM_PROGRAM_ID, False, False)])
+    bh = Hash.new_unique()
+    tx = Transaction.new_unsigned(Message.new_with_blockhash([ix], RELAYER.pubkey(), bh))
+    if sign:
+        tx.partial_sign([creator], bh)
+    return tx, pda
+
+
+def cosign_tx(signer, agreement=None, *, data=COSIGN_DISC, sign=True):
+    agreement = agreement or Keypair().pubkey()
+    ix = Instruction(PROGRAM, data, [AccountMeta(signer.pubkey(), True, False), AccountMeta(agreement, False, True)])
+    bh = Hash.new_unique()
+    tx = Transaction.new_unsigned(Message.new_with_blockhash([ix], RELAYER.pubkey(), bh))
+    if sign:
+        tx.partial_sign([signer], bh)
+    return tx, agreement
+
+
+def test_relays_create_agreement(client, env):
+    creator, other = Keypair(), Keypair()
+    tx, pda = agreement_tx(creator, [creator.pubkey(), other.pubkey()])
+    res = post(client, tx)
+    assert res.status_code == 200, res.text
+    assert res.json()["kind"] == "create_agreement" and res.json()["account"] == str(pda) == res.json()["proof_pda"]
+    Transaction.from_bytes(base64.b64decode(env[0])).verify()
+
+
+def test_relays_co_sign(client, env):
+    signer = Keypair()
+    tx, agreement = cosign_tx(signer)
+    res = post(client, tx)
+    assert res.status_code == 200, res.text
+    assert res.json()["kind"] == "co_sign" and res.json()["account"] == str(agreement)
+    Transaction.from_bytes(base64.b64decode(env[0])).verify()
+
+
+def test_agreement_instructions_reject_abuse(client):
+    me = Keypair()
+    # relayer imza atan taraf olamaz
+    ix = Instruction(PROGRAM, COSIGN_DISC, [AccountMeta(RELAYER.pubkey(), True, False), AccountMeta(Keypair().pubkey(), False, True)])
+    tx = Transaction.new_unsigned(Message.new_with_blockhash([ix], RELAYER.pubkey(), Hash.new_unique()))
+    assert post(client, tx).status_code == 400
+    # co_sign'a fazladan veri eklenemez
+    assert post(client, cosign_tx(me, data=COSIGN_DISC + b"\x01")[0]).status_code == 400
+    # yanlış program, imzasız, yanlış payer
+    other_prog = Keypair().pubkey()
+    assert post(client, agreement_tx(me, [me.pubkey(), Keypair().pubkey()], program=other_prog)[0]).status_code == 400
+    assert post(client, cosign_tx(me, sign=False)[0]).status_code == 400
+    assert post(client, agreement_tx(me, [me.pubkey(), Keypair().pubkey()], relayer=Keypair().pubkey())[0]).status_code == 400
+    # taraf sayısı sınırı ölçüde veri uzunluğuyla da korunur
+    big = [Keypair().pubkey() for _ in range(9)]
+    assert post(client, agreement_tx(me, [me.pubkey(), *big])[0]).status_code == 400
+
+
 def test_info(client):
     body = client.get("/relay/info").json()
     assert body == {"enabled": True, "program_id": str(PROGRAM), "relayer_pubkey": str(RELAYER.pubkey()), "cluster": "devnet",
@@ -80,7 +144,7 @@ def test_happy_path_relayer_adds_its_signature(client, env):
     tx, pda = build_tx(signer)
     res = post(client, tx)
     assert res.status_code == 200, res.text
-    assert res.json()["proof_pda"] == str(pda)
+    assert res.json()["proof_pda"] == str(pda) and res.json()["kind"] == "notarize"
     sent = Transaction.from_bytes(base64.b64decode(env[0]))
     sent.verify()  # iki imza da geçerli
 
