@@ -63,6 +63,7 @@ def main():
     ap.add_argument("--funder", default=None, help="fon cüzdanı (Solana CLI JSON); airdrop yerine SOL aktarır")
     ap.add_argument("--llm", action="store_true", help="agent'lar LLM function calling kullansın (bkz. llm.py)")
     ap.add_argument("--chain", action="store_true", help="Research -> Analysis -> Decision zincirini de çalıştır")
+    ap.add_argument("--agreement", action="store_true", help="iki agent'ın birlikte imzaladığı sözleşme akışını da çalıştır")
     ap.add_argument("--delay", type=float, default=0.5)
     a = ap.parse_args()
 
@@ -84,7 +85,7 @@ def main():
     common = {"rpc": rpc, "program_id": program, "funder": funder, "log": log}
 
     console.print(Panel.fit("[bold]Notary v2[/] · zincir üstü kayıt, API'siz doğrulama", subtitle=f"{url} · {short(program, 6)}", border_style="blue"))
-    ok3 = True
+    ok3 = ok4 = True
     try:
         step(1, "agent_a: rapor üret ve zincire kaydet", a.delay)
         receiver_pk = onchain.agent_keypair(receiver_agent.RECEIVER_ID).pubkey()
@@ -119,13 +120,28 @@ def main():
             rows2 = chain.explain(rpc, res["decision"], cdir, program)
             lineage_table(rows2)
             ok3 = [r["status"] for r in rows] == ["VERIFIED", "VERIFIED"] and [r["status"] for r in rows2] == ["INVALID", "VERIFIED"]
+        if a.agreement:
+            step(6, "Çok imzalı sözleşme: agent_a açar, agent_b imzalar", a.delay)
+            a_kp, b_kp = onchain.agent_keypair(sender_agent.SENDER_ID), onchain.agent_keypair(receiver_agent.RECEIVER_ID)
+            for kp in (a_kp, b_kp):
+                onchain.ensure_funded(rpc, kp, funder)
+            contract = (box / "contract.txt")
+            contract.write_text(f"Supply agreement between agent_a and agent_b\nRun: {time.strftime('%Y%m%dT%H%M%S')}\n")
+            h = onchain.sha256_bytes(contract.read_bytes())
+            ag = onchain.create_agreement(rpc, a_kp, h, [a_kp.pubkey(), b_kp.pubkey()], program_id=program)
+            log(f"agent_a sözleşmeyi açtı: {ag['agreement_pda']}")
+            pending = onchain.verify(rpc, contract.read_bytes(), pda=ag["agreement_pda"], program_id=program)
+            console.print(f"  agent_b doğrulaması: [blue]{pending['status']}[/] ({pending['agreement']['signed_count']}/2 imza)")
+            onchain.co_sign(rpc, b_kp, ag["agreement_pda"], program_id=program)
+            done = onchain.verify(rpc, contract.read_bytes(), pda=ag["agreement_pda"], program_id=program)
+            ok4 = panel(done, "contract.txt", "VERIFIED") and pending["status"] == "PENDING"
     finally:
         if server:
             server.shutdown()
 
-    passed = ok1 and ok2 and ok3
+    passed = ok1 and ok2 and ok3 and ok4
     console.print(Rule(style="green" if passed else "red"))
-    console.print("[bold green]Demo başarılı:[/] VERIFIED, 1 byte → INVALID" + (", provenance zincirden okundu" if a.chain else "")
+    console.print("[bold green]Demo başarılı:[/] VERIFIED, 1 byte → INVALID" + (", provenance zincirden okundu" if a.chain else "") + (", sözleşme PENDING → VERIFIED" if a.agreement else "")
                   + ". Backend kullanılmadı." if passed else "[bold red]Demo beklenmeyen sonuç verdi.[/]")
     return 0 if passed else 1
 

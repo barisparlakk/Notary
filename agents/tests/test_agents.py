@@ -175,3 +175,8 @@ def test_openai_compat_bad_tool_arguments_do_not_crash(chain_rpc, tmp_path, monk
 def test_demo_v2_with_chain_passes(monkeypatch):
     monkeypatch.setattr("sys.argv", ["demo_v2.py", "--mock", "--delay", "0", "--chain"])
     assert demo_v2.main() == 0
+
+
+def test_demo_v2_with_agreement_passes(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["demo_v2.py", "--mock", "--delay", "0", "--agreement"])
+    assert demo_v2.main() == 0
