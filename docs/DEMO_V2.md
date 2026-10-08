@@ -15,7 +15,7 @@ Anlatılacak ana şey: bizim sunucumuz kapalıyken bile bir belgenin doğrulanab
    Kayıt ve doğrulama, tek byte değişince INVALID, provenance zincirden okunur, iki agent'lı sözleşme PENDING'den VERIFIED'a geçer.
 2. **İnsan** (tarayıcı): Record, cüzdanı bağla, PDF seç, "Sign & Notarize". Makbuzda PDA, zincir saati, QR, JSON ve PDF sertifika.
 3. **Başka cihaz**: QR'ı okut, Check sayfası kaydı gösterir, dosyayı yükle. Yeşil mühür ve "This is the file that was recorded."
-4. **Sözleşme**: Record'da "Multi-party agreement", taraf ekle, oluştur (1/3 imzalı). Diğer taraf Records > Agreements'ta aynı dosyayı yükleyip imzalar; dosya eşleşmeden imza düğmesi açılmaz. Doğrulama sayfası tamamlanana kadar PENDING gösterir.
+4. **Sözleşme**: Agreements sayfasında "New agreement", taraf ekle, oluştur (1/3 imzalı). Diğer taraf aynı sayfada "Sign" der, aynı dosyayı yükleyip imzalar; dosya eşleşmeden imza düğmesi açılmaz. Check sayfası tamamlanana kadar mavi mührü ve "Not everyone has signed yet" gösterir.
 5. **Bir bayt değişirse**: Check sayfasında bir dosyayı bırakın, sonra bir bayt değiştirilmiş hâlini; kayıtlı mühür (yeşil) ile dosyanın mührü (kırmızı) yan yana çıkar ve çok farklı görünür. Sunucumuzu kapatmak (relayer sitesi) doğrulamayı etkilemez.
 6. **Açık kaynak doğrulayıcı**: `python agents/verify_standalone.py belge.pdf --pda <PDA> --program <ID>`
 7. **Provenance**: Check sonucunda "Based on" satırı, ya da Records > Inspect.
