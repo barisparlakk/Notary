@@ -4,3 +4,7 @@ reportlab
 anthropic
 solders
 pytest
+fastapi
+uvicorn
+python-multipart
+httpx

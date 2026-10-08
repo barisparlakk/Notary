@@ -1,0 +1,58 @@
+{
+  "name": "Notary: notarize and verify a file",
+  "nodes": [
+    {
+      "parameters": { "httpMethod": "POST", "path": "notary-upload", "options": { "binaryPropertyName": "data" } },
+      "name": "Webhook (file upload)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "notary-upload"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.NOTARY_AGENT_SERVICE_URL }}/agent/notarize",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "X-API-Key", "value": "={{ $env.NOTARY_AGENT_SERVICE_TOKEN }}" }] },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            { "parameterType": "formBinaryData", "name": "file", "inputDataFieldName": "data" },
+            { "name": "agent", "value": "agent_a" }
+          ]
+        }
+      },
+      "name": "Notarize",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.NOTARY_AGENT_SERVICE_URL }}/agent/verify",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "X-API-Key", "value": "={{ $env.NOTARY_AGENT_SERVICE_TOKEN }}" }] },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            { "parameterType": "formBinaryData", "name": "file", "inputDataFieldName": "data" },
+            { "name": "proof_pda", "value": "={{ $json.proof_pda }}" }
+          ]
+        }
+      },
+      "name": "Verify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 0]
+    }
+  ],
+  "connections": {
+    "Webhook (file upload)": { "main": [[{ "node": "Notarize", "type": "main", "index": 0 }]] },
+    "Notarize": { "main": [[{ "node": "Verify", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}
