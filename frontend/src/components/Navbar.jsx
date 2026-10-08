@@ -1,132 +1,77 @@
 import React, { useEffect, useState } from 'react';
-import { Shield, Activity, Database, CheckCircle2, Server, FlaskConical } from 'lucide-react';
+import { sha256Hex } from '../lib/chain';
 import { checkHealth } from '../api';
 import { API_URL } from '../lib/config';
 import { useNotary } from '../lib/notary';
-import PulsarGlassSegmented from './PulsarGlassSegmented';
+import Seal from './Seal';
+import Tabs from './Tabs';
 import WalletButton from './WalletButton';
+
+const NAV = [
+  { value: 'check', label: 'Check' },
+  { value: 'record', label: 'Record' },
+  { value: 'records', label: 'Records' },
+];
 
 export default function Navbar({ activeTab, setActiveTab }) {
   const { isDemo, cluster } = useNotary();
-  const [backendOnline, setBackendOnline] = useState(false);
+  const [relayerOnline, setRelayerOnline] = useState(false);
+  const [markHash, setMarkHash] = useState('');
 
+  // Logo da bir mühür: "notary" kelimesinin hash'inden çizilir
+  useEffect(() => { sha256Hex('notary').then(setMarkHash); }, []);
+
+  // API opsiyoneldir (yalnızca relayer); doğrulama ona bağlı değildir.
   useEffect(() => {
-    let cancelled = false;
-    // API opsiyoneldir (yalnızca /relay ve indeksleyici); doğrulama ona bağlı değildir.
-    const runCheck = async () => {
-      if (!API_URL) return;
-      try {
-        const res = await checkHealth();
-        if (!cancelled) setBackendOnline(res.online);
-      } catch {
-        if (!cancelled) setBackendOnline(false);
-      }
-    };
-    runCheck();
-    const interval = setInterval(runCheck, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [activeTab]);
-
-  const navOptions = [
-    { value: 'pipeline', label: 'Protocol Pipeline', icon: <Activity className="w-3.5 h-3.5" /> },
-    { value: 'notarize', label: 'Notarize Studio', icon: <Shield className="w-3.5 h-3.5" /> },
-    { value: 'verify', label: 'Verification Terminal', icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
-    { value: 'ledger', label: 'Ledger & Registry', icon: <Database className="w-3.5 h-3.5" /> },
-  ];
+    let off = false;
+    if (!API_URL) return undefined;
+    const tick = async () => { const r = await checkHealth().catch(() => ({ online: false })); if (!off) setRelayerOnline(r.online); };
+    tick();
+    const id = setInterval(tick, 8000);
+    return () => { off = true; clearInterval(id); };
+  }, []);
 
   return (
-    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-200">
+    <header className="sticky top-0 z-40 bg-paper/90 backdrop-blur border-b border-rule">
       <div className="max-w-page mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          
-          {/* Logo / Brand — Cal.com style bold logo */}
-          <div 
-            className="flex items-center space-x-2.5 cursor-pointer select-none"
-            onClick={() => setActiveTab('pipeline')}
-          >
-            <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center text-white shadow-sm">
-              <Shield className="w-4 h-4 fill-white" />
-            </div>
-            <div className="flex items-center space-x-1.5">
-              <span className="font-bold text-lg tracking-tight text-gray-950 font-sans">
-                Notary
-              </span>
-              <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">
-                v2.0
-              </span>
-            </div>
+        <div className="flex items-center justify-between gap-4 h-16">
+          <div className="flex items-center gap-8 min-w-0">
+            <button type="button" onClick={() => setActiveTab('check')} className="flex items-center gap-2.5 shrink-0" aria-label="Notary, go to Check">
+              {markHash ? <Seal hash={markHash} state="neutral" size={30} label="" /> : <span className="w-[30px] h-[30px]" />}
+              <span className="font-display text-xl font-bold tracking-tight text-ink">Notary</span>
+            </button>
+            <nav aria-label="Main" className="hidden md:block">
+              <Tabs options={NAV} value={activeTab} onChange={setActiveTab} label="Main sections" />
+            </nav>
           </div>
 
-          {/* Pulsar Glass — Liquid Segmented Slider Navigation (Compact sm size) */}
-          <nav className="hidden md:flex items-center">
-            <PulsarGlassSegmented
-              options={navOptions}
-              value={activeTab}
-              onChange={setActiveTab}
-              size="sm"
-              theme="light"
-            />
-          </nav>
-
-          {/* Right Status Badges & Quick Action */}
-          <div className="flex items-center space-x-2.5">
-            {/* Solana cluster / DEMO Pill */}
+          <div className="flex items-center gap-2.5 shrink-0">
             {isDemo ? (
-              <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-xs font-mono text-amber-700" title="Nothing is written on-chain in DEMO mode">
-                <FlaskConical className="w-3 h-3" />
-                <span className="font-medium">DEMO · not on-chain</span>
-              </div>
+              <span className="hidden sm:inline-flex items-center rounded-full border border-dashed border-gray-400 px-2.5 py-1 text-xs text-gray-700" title="Nothing is recorded on Solana in demo mode">
+                Demo: not recorded on Solana
+              </span>
             ) : (
-              <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-200 text-xs font-mono text-gray-700">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="font-medium">Solana {cluster === 'devnet' ? 'Devnet' : cluster}</span>
-              </div>
+              <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-rule px-2.5 py-1 text-xs text-gray-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-verified" />Solana {cluster === 'devnet' ? 'devnet' : cluster}
+              </span>
             )}
-
-            {/* Optional helper API pill (verification does not depend on it) */}
             {API_URL && (
-              <div className={`hidden lg:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-mono border ${
-                backendOnline
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : 'bg-gray-50 text-gray-600 border-gray-200'
-              }`} title="Optional helper API (relay / index). On-chain verification works without it.">
-                <Server className="w-3 h-3" />
-                <span>{backendOnline ? 'API online' : 'API offline (optional)'}</span>
-              </div>
+              <span className="hidden lg:inline-flex items-center gap-1.5 rounded-full border border-rule px-2.5 py-1 text-xs text-gray-700" title="The relayer pays network fees. Checking a file does not need it.">
+                <span className={`w-1.5 h-1.5 rounded-full ${relayerOnline ? 'bg-verified' : 'bg-gray-300'}`} />
+                {relayerOnline ? 'Relayer online' : 'Relayer offline'}
+              </span>
             )}
-
             <WalletButton />
           </div>
-
         </div>
 
-        {/* Mobile Navigation bar */}
-        <div className="flex md:hidden overflow-x-auto py-2 space-x-2 border-t border-gray-100 no-scrollbar">
-          {navOptions.map((opt) => {
-            const isActive = activeTab === opt.value;
-            return (
-              <button
-                key={opt.value}
-                onClick={() => setActiveTab(opt.value)}
-                className={`whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium cursor-pointer ${
-                  isActive
-                    ? 'bg-black text-white'
-                    : 'bg-gray-100 text-gray-600'
-                }`}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
+        <nav aria-label="Main" className="md:hidden border-t border-rule -mx-4 px-4">
+          <Tabs options={NAV} value={activeTab} onChange={setActiveTab} label="Main sections" />
+        </nav>
 
-        {/* Telefonda başlıkta rozete yer yok: DEMO modu yine de görünür kalmalı */}
         {isDemo && (
-          <div className="sm:hidden -mx-4 px-4 py-1.5 bg-amber-50 border-t border-amber-200 text-xs text-amber-800" role="status">
-            DEMO mode. Nothing is written on-chain.
+          <div className="sm:hidden -mx-4 px-4 py-1.5 border-t border-dashed border-gray-400 text-xs text-gray-700" role="status">
+            Demo: nothing is recorded on Solana.
           </div>
         )}
       </div>

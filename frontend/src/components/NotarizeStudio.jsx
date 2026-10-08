@@ -15,7 +15,6 @@ import {
   X,
   AlertTriangle,
   FlaskConical,
-  Users,
 } from 'lucide-react';
 import FileDrop from './FileDrop';
 import { useNotary, shortKey } from '../lib/notary';
@@ -23,7 +22,7 @@ import { buildCertificate, deriveProofPda, hexToBytes, sha256Hex, MAX_PARENTS } 
 import { getMeta, setMeta } from '../lib/localMeta';
 import { API_URL } from '../lib/config';
 import { downloadCertificatePdf } from '../lib/certificatePdf';
-import PulsarGlassSegmented from './PulsarGlassSegmented';
+import Tabs from './Tabs';
 import AgreementStudio from './AgreementStudio';
 
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -177,7 +176,7 @@ export default function NotarizeStudio({ onProofCreated }) {
           )}
         </div>
         <h2 className="text-3xl font-extrabold tracking-tight text-gray-950 font-sans">
-          Notarize Studio
+          Record a file
         </h2>
         <p className="text-sm sm:text-base text-gray-600 max-w-2xl leading-relaxed">
           Compute the SHA-256 fingerprint in your browser, sign with your wallet, and anchor a proof account (PDA) on Solana. Anyone can verify it later straight from the chain, without our API.
@@ -185,15 +184,11 @@ export default function NotarizeStudio({ onProofCreated }) {
       </div>
 
       <div className="self-start">
-        <PulsarGlassSegmented
-          options={[
-            { value: 'single', label: 'Single signer', icon: <ShieldCheck className="w-3.5 h-3.5" /> },
-            { value: 'agreement', label: 'Multi-party agreement', icon: <Users className="w-3.5 h-3.5" /> },
-          ]}
+        <Tabs
+          label="What to record"
+          options={[{ value: 'single', label: 'Single signer' }, { value: 'agreement', label: 'Multi-party agreement' }]}
           value={mode}
           onChange={setMode}
-          size="sm"
-          theme="light"
         />
       </div>
 

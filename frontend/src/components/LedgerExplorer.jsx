@@ -5,19 +5,17 @@ import {
   Copy,
   Check,
   UserPlus,
-  Layers,
   FileText,
   ArrowUpRight,
   Download,
   GitBranch,
   Trash2,
-  Users,
 } from 'lucide-react';
 import { useNotary, shortKey } from '../lib/notary';
 import { buildCertificate, lineage } from '../lib/chain';
 import { addIdentity, getIdentities, getMeta, removeIdentity } from '../lib/localMeta';
 import Dialog from './Dialog';
-import PulsarGlassSegmented from './PulsarGlassSegmented';
+import Tabs from './Tabs';
 import AgreementsPanel from './AgreementsPanel';
 import { downloadCertificatePdf } from '../lib/certificatePdf';
 
@@ -171,7 +169,7 @@ export default function LedgerExplorer() {
               <span className="text-xs font-mono text-gray-500">{isDemo ? 'demo (in-browser)' : `solana-${cluster}`}</span>
             </div>
             <h2 className="text-3xl font-extrabold tracking-tight text-gray-950 font-sans">
-              Ledger & Identity Registry
+              Records
             </h2>
             <p className="text-sm text-gray-600">
               Proof accounts read straight from Solana, plus an address book of the signers you know. Anyone can look up any proof, no account needed.
@@ -180,16 +178,15 @@ export default function LedgerExplorer() {
 
           {/* Pulsar Glass Liquid Segmented Tabs */}
           <div className="self-start w-full sm:w-auto sm:shrink-0 max-w-full overflow-x-auto">
-            <PulsarGlassSegmented
+            <Tabs
+              label="Records sections"
               options={[
-                { value: 'proofs', label: `Proof Accounts (${proofs.length})`, icon: <Layers className="w-3.5 h-3.5" /> },
-                { value: 'agreements', label: `Agreements (${agreementCount})`, icon: <Users className="w-3.5 h-3.5" /> },
-                { value: 'agents', label: `Identities (${identities.length + (signer ? 1 : 0)})`, icon: <UserPlus className="w-3.5 h-3.5" /> },
+                { value: 'proofs', label: `Recorded files (${proofs.length})` },
+                { value: 'agreements', label: `Agreements (${agreementCount})` },
+                { value: 'agents', label: `People (${identities.length + (signer ? 1 : 0)})` },
               ]}
               value={activeSection}
               onChange={setActiveSection}
-              size="sm"
-              theme="light"
             />
           </div>
         </div>

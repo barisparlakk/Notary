@@ -209,7 +209,7 @@ export default function Check({ initialPda = '' }) {
           <div className="max-w-3xl">
             <h2 className="font-display text-3xl sm:text-4xl font-semibold leading-tight">{stmt.title}</h2>
             <p className="mt-3 text-gray-600 max-w-xl leading-relaxed">
-              {status === 'VERIFIED' && recordedBy && <>Recorded by <span className="font-mono text-xs">{shortKey(recordedBy, 6)}</span> on {recordedAt}.</>}
+              {status === 'VERIFIED' && <>It matches the record below, byte for byte.</>}
               {status === 'PENDING' && <>{result.agreement.signed_count} of {result.agreement.parties.length} parties have signed. It is binding once all of them have.</>}
               {status === 'INVALID' && <>It differs from the record in at least one byte. A single changed byte gives a completely different seal.</>}
               {status === 'NOT_FOUND' && <>It was never recorded, or it was changed after it was. If you have the address of a record, add it above and check again.</>}
