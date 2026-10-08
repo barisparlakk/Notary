@@ -7,51 +7,54 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Cal.com Inspired Clean Architecture
-        cal: {
-          bg: '#f9fafb',        // Light background canvas
-          card: '#ffffff',      // Pure white elevated bento cards
-          subtle: '#f3f4f6',    // Soft input/badge background
-          border: '#e5e7eb',    // 1px crisp neutral border
-          borderLight: '#f1f5f9',
-          borderHover: '#d1d5db',
-          text: '#111827',      // Deep black typography
-          muted: '#64748b',     // Secondary slate text
-          dark: '#0f172a',      // Primary dark elements
+        // Notary renk sistemi: soğuk bir kâğıt zemini, mürekkep gibi koyu metin, durumu anlatan üç mühür mürekkebi.
+        ink: '#161B33',
+        paper: '#F5F6F8',
+        rule: '#D9DCE5',
+        verified: '#0F7B5F',
+        altered: '#C2362F',
+        pending: '#3057D5',
+        // Gri ölçeği mürekkep tonundan türetildi; mevcut ekranlar kendiliğinden bu soğuk tona geçer.
+        // gray-500 (#5F6678) paper ve beyaz üzerinde >= 5:1; gray-400 metin için kullanılmaz.
+        gray: {
+          50: '#F5F6F8',
+          100: '#ECEEF2',
+          200: '#D9DCE5',
+          300: '#C2C7D4',
+          400: '#9AA1B2',
+          500: '#5F6678',
+          600: '#484E60',
+          700: '#343A4D',
+          800: '#232842',
+          900: '#1A1F38',
+          950: '#161B33',
         },
-        surface: {
-          base: '#f9fafb',
-          subtle: '#f3f4f6',
-          panel: '#ffffff',
-          elevated: '#ffffff',
-          border: '#e5e7eb',
-          borderLight: '#d1d5db',
+        // Eski ekranların kullandığı adlar (aşama b/c'de kalkacak)
+        cal: {
+          bg: '#F5F6F8',
+          card: '#ffffff',
+          subtle: '#ECEEF2',
+          border: '#D9DCE5',
+          borderLight: '#ECEEF2',
+          borderHover: '#C2C7D4',
+          text: '#161B33',
+          muted: '#5F6678',
+          dark: '#161B33',
         },
         accent: {
-          DEFAULT: '#111827',   // Cal.com uses bold black as primary accent
-          hover: '#27272a',
-          active: '#09090b',
-          blue: '#2563eb',
-          blueSubtle: 'rgba(37, 99, 235, 0.08)',
+          DEFAULT: '#161B33',
+          hover: '#232842',
+          active: '#161B33',
+          blue: '#3057D5',
+          blueSubtle: 'rgba(48, 87, 213, 0.08)',
         },
-        status: {
-          success: '#10b981',
-          successBg: '#f0fdf4',
-          successBorder: '#bbf7d0',
-          successText: '#166534',
-          error: '#ef4444',
-          errorBg: '#fef2f2',
-          errorBorder: '#fecaca',
-          errorText: '#991b1b',
-          warning: '#f59e0b',
-          warningBg: '#fffbeb',
-          warningBorder: '#fde68a',
-          warningText: '#92400e',
-        }
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Menlo', 'Consolas', 'monospace'],
+        sans: ['"Hanken Grotesk"', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+        // "Belge sesi": yalnızca sayfa başlıkları ve sonuç cümleleri
+        display: ['"Source Serif 4"', 'Georgia', 'Cambria', 'serif'],
+        // Yalnızca hash ve adresler için; sistem mono yazı tipi
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
       boxShadow: {
         'cal-card': '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
