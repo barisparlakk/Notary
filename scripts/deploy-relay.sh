@@ -13,7 +13,7 @@ RPC="${SOLANA_RPC_URL:-https://api.devnet.solana.com}"
 WORK="$(mktemp -d)"
 mkdir -p "$WORK/app"
 cp -R "$ROOT/backend/vercel-relay/." "$WORK/"
-cp "$ROOT/backend/app/__init__.py" "$ROOT/backend/app/models.py" "$ROOT/backend/app/relay.py" "$ROOT/backend/app/solana_client.py" "$WORK/app/"
+cp "$ROOT/backend/app/__init__.py" "$ROOT/backend/app/relay.py" "$ROOT/backend/app/solana_client.py" "$WORK/app/"
 cd "$WORK"
 
 $VERCEL link --yes --project notary-relay >/dev/null

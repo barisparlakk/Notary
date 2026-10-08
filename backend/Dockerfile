@@ -36,13 +36,12 @@ COPY --from=builder /install /usr/local
 COPY . .
 
 # Veritabanı ve anahtar dizinleri izinleri
-RUN mkdir -p /app/data /app/keys && chown -R notaryuser:notaryuser /app
+RUN mkdir -p /app/keys && chown -R notaryuser:notaryuser /app
 
 USER notaryuser
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    DB_PATH=/app/data/notary.db \
     PORT=8000
 
 EXPOSE 8000
