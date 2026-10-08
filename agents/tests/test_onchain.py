@@ -183,3 +183,101 @@ def test_golden_vectors_decode_and_encode():
         V["receiver"], [V["parent_document_hash"]], g["created_at_unix"], g["created_at_iso"], V["bump"])
     bare = onchain.decode_proof(bytes.fromhex(g["proof_account_no_receiver_no_parents_hex"]))
     assert (bare["receiver"], bare["parents"], bare["created_at"], bare["bump"]) == (None, [], g["created_at_unix"], V["bump"])
+
+
+# ---------------------------------------------------------------- çok imzalı sözleşme (create_agreement / co_sign)
+def _party_kps(n, base=0x60):
+    return [Keypair.from_seed(bytes([base + i]) * 32) for i in range(n)]
+
+
+def test_agreement_lifecycle_pending_then_verified(chain):
+    rpc, _ = chain
+    a, b, c = _party_kps(3)
+    data = b"service agreement v1"
+    h = onchain.sha256_bytes(data)
+    out = onchain.create_agreement(rpc, a, h, [a.pubkey(), b.pubkey(), c.pubkey()], program_id=V["program_id"])
+
+    ag = onchain.get_agreement(rpc, out["agreement_pda"])
+    assert ag["signed_count"] == 1 and not ag["complete"]
+    assert ag["parties"][0]["signer"] == str(a.pubkey()) and ag["parties"][0]["signed_at"] > 0  # oluşturan imzalı
+    assert all(p["signed_at"] == 0 for p in ag["parties"][1:])
+    assert ag["document_hash"] == h.hex() and ag["creator"] == str(a.pubkey())
+
+    pending = onchain.verify(rpc, data, pda=out["agreement_pda"], program_id=V["program_id"])
+    assert pending["status"] == "PENDING" and pending["agreement"]["signed_count"] == 1
+
+    onchain.co_sign(rpc, b, out["agreement_pda"], program_id=V["program_id"])
+    assert onchain.verify(rpc, data, pda=out["agreement_pda"], program_id=V["program_id"])["status"] == "PENDING"
+    onchain.co_sign(rpc, c, out["agreement_pda"], program_id=V["program_id"])
+
+    done = onchain.verify(rpc, data, pda=out["agreement_pda"], program_id=V["program_id"])
+    assert done["status"] == "VERIFIED" and done["agreement"]["complete"]
+    # imzalayan ve hash ile arama aynı sonucu verir
+    assert onchain.verify(rpc, data, signer=a.pubkey(), program_id=V["program_id"])["status"] == "VERIFIED"
+    assert onchain.verify(rpc, data, program_id=V["program_id"])["status"] == "VERIFIED"
+    # değişmiş dosya
+    assert onchain.verify(rpc, data + b"!", pda=out["agreement_pda"], program_id=V["program_id"])["status"] == "INVALID"
+
+
+def test_agreement_rules_enforced(chain):
+    rpc, _ = chain
+    a, b, c, outsider = _party_kps(4)
+    h = onchain.sha256_bytes(b"rules")
+    pid = V["program_id"]
+    with pytest.raises(onchain.ChainError):  # istemci: tek taraf
+        onchain.create_agreement(rpc, a, h, [a.pubkey()], program_id=pid)
+    with pytest.raises(onchain.ChainError, match="CreatorNotParty"):
+        onchain.create_agreement(rpc, a, h, [b.pubkey(), c.pubkey()], program_id=pid)
+    out = onchain.create_agreement(rpc, a, h, [a.pubkey(), b.pubkey()], program_id=pid)
+    with pytest.raises(onchain.ChainError, match="already in use"):
+        onchain.create_agreement(rpc, a, h, [a.pubkey(), b.pubkey()], program_id=pid)
+    with pytest.raises(onchain.ChainError, match="NotAParty"):
+        onchain.co_sign(rpc, outsider, out["agreement_pda"], program_id=pid)
+    onchain.co_sign(rpc, b, out["agreement_pda"], program_id=pid)
+    with pytest.raises(onchain.ChainError, match="AlreadySigned"):
+        onchain.co_sign(rpc, b, out["agreement_pda"], program_id=pid)
+    with pytest.raises(onchain.ChainError, match="AlreadySigned"):  # oluşturan zaten imzalı
+        onchain.co_sign(rpc, a, out["agreement_pda"], program_id=pid)
+
+
+def test_agreement_and_proof_share_hash_but_do_not_collide(chain):
+    """Aynı hash'in hem tekil kaydı hem sözleşmesi olabilir; arama dataSize ile türleri ayırır."""
+    rpc, _ = chain
+    a, b = _party_kps(2)
+    h = onchain.sha256_bytes(b"both")
+    onchain.notarize(rpc, a, h, program_id=V["program_id"])
+    onchain.create_agreement(rpc, a, h, [a.pubkey(), b.pubkey()], program_id=V["program_id"])
+    assert len(onchain.find_by_hash(rpc, h, V["program_id"])) == 1
+    assert len(onchain.find_agreements_by_hash(rpc, h, V["program_id"])) == 1
+    assert len(onchain.list_by_signer(rpc, a.pubkey(), V["program_id"])) == 1  # sözleşme, kayıt listesine karışmaz
+
+
+def test_list_agreements_for_party(chain):
+    rpc, _ = chain
+    a, b, c = _party_kps(3, 0x70)
+    pid = V["program_id"]
+    onchain.create_agreement(rpc, a, onchain.sha256_bytes(b"1"), [a.pubkey(), b.pubkey()], program_id=pid)
+    onchain.create_agreement(rpc, c, onchain.sha256_bytes(b"2"), [c.pubkey(), a.pubkey(), b.pubkey()], program_id=pid)
+    onchain.create_agreement(rpc, c, onchain.sha256_bytes(b"3"), [c.pubkey(), a.pubkey()], program_id=pid)
+    assert len(onchain.list_agreements_for(rpc, a.pubkey(), pid)) == 3
+    assert len(onchain.list_agreements_for(rpc, b.pubkey(), pid)) == 2
+    mine = onchain.list_agreements_for(rpc, c.pubkey(), pid)
+    assert len(mine) == 2 and all(x["creator"] == str(c.pubkey()) for x in mine)
+
+
+def test_agreement_relayer_can_pay(chain):
+    rpc, _ = chain
+    a, b, relayer = _party_kps(3, 0x80)
+    pid = V["program_id"]
+    out = onchain.create_agreement(rpc, a, onchain.sha256_bytes(b"paid"), [a.pubkey(), b.pubkey()], program_id=pid, payer=relayer)
+    onchain.co_sign(rpc, b, out["agreement_pda"], program_id=pid, payer=relayer)
+    assert onchain.get_agreement(rpc, out["agreement_pda"])["complete"]
+
+
+def test_agreement_encoding_constants():
+    assert onchain.AGREEMENT_SIZE == 250 and onchain.AGREEMENT_PARTY_OFFSET == 85
+    h = bytes(range(32))
+    ks = [str(k.pubkey()) for k in _party_kps(2)]
+    data = onchain.encode_create_agreement_data(h, ks)
+    assert data[:8] == onchain.CREATE_AGREEMENT_DISC and len(data) == 8 + 32 + 4 + 64
+    assert onchain.CO_SIGN_DISC != onchain.NOTARIZE_DISC

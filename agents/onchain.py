@@ -27,8 +27,14 @@ KEYS_DIR = Path(__file__).parent / "keys"
 COMMITMENT = "confirmed"
 
 MAX_PARENTS = 4
+MAX_PARTIES = 4
 NOTARIZE_DISC = hashlib.sha256(b"global:notarize").digest()[:8]
 PROOF_DISC = hashlib.sha256(b"account:Proof").digest()[:8]
+CREATE_AGREEMENT_DISC = hashlib.sha256(b"global:create_agreement").digest()[:8]
+CO_SIGN_DISC = hashlib.sha256(b"global:co_sign").digest()[:8]
+AGREEMENT_DISC = hashlib.sha256(b"account:Agreement").digest()[:8]
+PROOF_SIZE, AGREEMENT_SIZE = 247, 250  # getProgramAccounts dataSize süzgeci: iki hesap türü hash ofsetini paylaşır
+AGREEMENT_PARTY_OFFSET = 85  # signers vektörünün ilk eleman ofseti; i. taraf = 85 + 32 * i
 SIGNER_OFFSET, HASH_OFFSET = 9, 41  # memcmp ofsetleri (CONTRACT.md v2, Bölüm 3)
 
 
@@ -115,6 +121,64 @@ def decode_proof(data: bytes) -> dict:
     }
 
 
+def encode_create_agreement_data(document_hash: bytes, signers):
+    if len(document_hash) != 32:
+        raise ChainError("document_hash 32 bayt olmalı")
+    if not 2 <= len(signers) <= MAX_PARTIES:
+        raise ChainError(f"sözleşme 2 ile {MAX_PARTIES} taraf içermeli")
+    keys = [bytes(Pubkey.from_string(str(k))) for k in signers]
+    if len(set(keys)) != len(keys):
+        raise ChainError("taraflar tekrar edemez")
+    return CREATE_AGREEMENT_DISC + document_hash + struct.pack("<I", len(keys)) + b"".join(keys)
+
+
+def decode_agreement(data: bytes) -> dict:
+    """Agreement hesabı (Borsh). Sondaki dolgu baytları yok sayılır."""
+    if data[:8] != AGREEMENT_DISC:
+        raise ChainError("Agreement discriminator uyuşmuyor")
+    o = 8
+    version = data[o]
+    o += 1
+    creator = Pubkey.from_bytes(data[o:o + 32])
+    o += 32
+    document_hash = data[o:o + 32]
+    o += 32
+    (created_at,) = struct.unpack_from("<q", data, o)
+    o += 8
+    (n,) = struct.unpack_from("<I", data, o)
+    o += 4
+    signers = [str(Pubkey.from_bytes(data[o + 32 * i:o + 32 * (i + 1)])) for i in range(n)]
+    o += 32 * n
+    (m,) = struct.unpack_from("<I", data, o)
+    o += 4
+    signed = list(struct.unpack_from(f"<{m}q", data, o))
+    o += 8 * m
+    parties = [
+        {"signer": signers[i], "signed_at": signed[i],
+         "signed_at_iso": datetime.fromtimestamp(signed[i], timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if signed[i] else None}
+        for i in range(n)
+    ]
+    done = sum(1 for p in parties if p["signed_at"])
+    return {
+        "version": version,
+        "creator": str(creator),
+        "document_hash": document_hash.hex(),
+        "created_at": created_at,
+        "created_at_iso": datetime.fromtimestamp(created_at, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "parties": parties,
+        "signed_count": done,
+        "complete": done == n,
+        "bump": data[o],
+    }
+
+
+def derive_agreement_pda(program_id, creator, document_hash: bytes):
+    """seeds = [b"agreement", creator, document_hash] -> (Pubkey, bump)"""
+    return Pubkey.find_program_address(
+        [b"agreement", bytes(Pubkey.from_string(str(creator))), document_hash], Pubkey.from_string(str(program_id))
+    )
+
+
 # ------------------------------------------------------------------------- RPC
 class Rpc:
     """Düz JSON-RPC (requests). Herhangi bir Solana RPC'si ya da mock_rpc ile çalışır."""
@@ -144,9 +208,11 @@ class Rpc:
             return None
         return {"owner": value["owner"], "data": base64.b64decode(value["data"][0])}
 
-    def get_program_accounts(self, program_id, offset, raw: bytes):
-        """memcmp süzgeci; raw 32 bayt (base58'e Pubkey ile çevrilir)."""
+    def get_program_accounts(self, program_id, offset, raw: bytes, data_size=None):
+        """memcmp süzgeci; raw 32 bayt (base58'e Pubkey ile çevrilir). data_size: hesap türünü ayırt eder."""
         flt = [{"memcmp": {"offset": offset, "bytes": str(Pubkey.from_bytes(raw))}}]
+        if data_size:
+            flt.append({"dataSize": data_size})
         items = self.call("getProgramAccounts", [str(program_id), {"encoding": "base64", "filters": flt, "commitment": COMMITMENT}])
         return [(it["pubkey"], base64.b64decode(it["account"]["data"][0])) for it in items]
 
@@ -235,29 +301,121 @@ def get_proof(rpc, pda):
 def find_by_hash(rpc, document_hash: bytes, program_id=None):
     """İmzalayanı bilinmeyen belge: memcmp(ofset 41) ile tüm kayıtlar."""
     program_id = program_id or PROGRAM_ID
-    return [{**decode_proof(d), "proof_pda": pk} for pk, d in rpc.get_program_accounts(program_id, HASH_OFFSET, document_hash)]
+    return [{**decode_proof(d), "proof_pda": pk}
+            for pk, d in rpc.get_program_accounts(program_id, HASH_OFFSET, document_hash, PROOF_SIZE)]
 
 
 def list_by_signer(rpc, signer, program_id=None):
     program_id = program_id or PROGRAM_ID
     raw = bytes(Pubkey.from_string(str(signer)))
-    return [{**decode_proof(d), "proof_pda": pk} for pk, d in rpc.get_program_accounts(program_id, SIGNER_OFFSET, raw)]
+    return [{**decode_proof(d), "proof_pda": pk}
+            for pk, d in rpc.get_program_accounts(program_id, SIGNER_OFFSET, raw, PROOF_SIZE)]
+
+
+def find_agreements_by_hash(rpc, document_hash: bytes, program_id=None):
+    program_id = program_id or PROGRAM_ID
+    return [{**decode_agreement(d), "agreement_pda": pk}
+            for pk, d in rpc.get_program_accounts(program_id, HASH_OFFSET, document_hash, AGREEMENT_SIZE)]
+
+
+def list_agreements_for(rpc, party, program_id=None):
+    """Bir cüzdanın taraf olduğu tüm sözleşmeler (4 olası taraf sırası için memcmp, birleşim)."""
+    program_id = program_id or PROGRAM_ID
+    raw, seen, out = bytes(Pubkey.from_string(str(party))), set(), []
+    for i in range(MAX_PARTIES):
+        for pk, d in rpc.get_program_accounts(program_id, AGREEMENT_PARTY_OFFSET + 32 * i, raw, AGREEMENT_SIZE):
+            if pk not in seen:
+                seen.add(pk)
+                out.append({**decode_agreement(d), "agreement_pda": pk})
+    return out
+
+
+def _send_ix(rpc, ix, signers, payer):
+    blockhash = rpc.latest_blockhash()
+    msg = Message.new_with_blockhash([ix], payer.pubkey(), blockhash)
+    uniq, seen = [], set()
+    for k in [payer, *signers]:
+        if str(k.pubkey()) not in seen:
+            seen.add(str(k.pubkey()))
+            uniq.append(k)
+    sig = rpc.send(Transaction(uniq, msg, blockhash))
+    rpc.confirm(sig)
+    return sig
+
+
+def create_agreement(rpc, creator: Keypair, document_hash: bytes, signers, program_id=None, payer: Keypair = None):
+    """Çok imzalı sözleşme açar; creator `signers` içinde olmalı ve oluştururken imzalamış sayılır.
+    -> {agreement_pda, tx_signature, creator, document_hash}"""
+    program_id = program_id or PROGRAM_ID
+    if not program_id:
+        raise ChainError("PROGRAM_ID tanımlı değil")
+    payer = payer or creator
+    pda, _ = derive_agreement_pda(program_id, creator.pubkey(), document_hash)
+    ix = Instruction(
+        Pubkey.from_string(str(program_id)),
+        encode_create_agreement_data(document_hash, signers),
+        [
+            AccountMeta(creator.pubkey(), True, False),
+            AccountMeta(payer.pubkey(), True, True),
+            AccountMeta(pda, False, True),
+            AccountMeta(SYSTEM_PROGRAM_ID, False, False),
+        ],
+    )
+    sig = _send_ix(rpc, ix, [creator], payer)
+    return {"agreement_pda": str(pda), "tx_signature": sig, "creator": str(creator.pubkey()), "document_hash": document_hash.hex()}
+
+
+def co_sign(rpc, signer: Keypair, agreement_pda, program_id=None, payer: Keypair = None):
+    """Sözleşmedeki kendi payını imzalar. -> {agreement_pda, tx_signature, signer}"""
+    program_id = program_id or PROGRAM_ID
+    if not program_id:
+        raise ChainError("PROGRAM_ID tanımlı değil")
+    payer = payer or signer
+    ix = Instruction(
+        Pubkey.from_string(str(program_id)),
+        CO_SIGN_DISC,
+        [AccountMeta(signer.pubkey(), True, False), AccountMeta(Pubkey.from_string(str(agreement_pda)), False, True)],
+    )
+    sig = _send_ix(rpc, ix, [signer], payer)
+    return {"agreement_pda": str(agreement_pda), "tx_signature": sig, "signer": str(signer.pubkey())}
+
+
+def get_agreement(rpc, pda):
+    acc = rpc.get_account(pda)
+    return decode_agreement(acc["data"]) if acc and acc["data"][:8] == AGREEMENT_DISC else None
+
+
+def _agreement_result(base, agreement, pda, received_hex):
+    base.update(agreement=agreement, proof_pda=str(pda), original_hash=agreement["document_hash"])
+    if agreement["document_hash"] != received_hex:
+        base["status"] = "INVALID"
+    else:
+        base["status"] = "VERIFIED" if agreement["complete"] else "PENDING"
+    return base
 
 
 def verify(rpc, file_bytes: bytes, pda=None, signer=None, program_id=None):
     """API'siz doğrulama (CONTRACT.md v2, Bölüm 4).
-    -> {status: VERIFIED|INVALID|NOT_FOUND, original_hash, received_hash, proof_pda, proof}"""
+    -> {status: VERIFIED|PENDING|INVALID|NOT_FOUND, original_hash, received_hash, proof_pda, proof}
+    PENDING: hash tutuyor ama çok imzalı sözleşmenin tüm tarafları henüz imzalamadı (yanıtta `agreement`)."""
     program_id = program_id or PROGRAM_ID
     received = sha256_bytes(file_bytes)
     out = {"status": "NOT_FOUND", "original_hash": "", "received_hash": received.hex(), "proof_pda": None, "proof": None}
 
     if pda is None and signer is not None:
         pda = derive_proof_pda(program_id, signer, received)[0]
+        if rpc.get_account(pda) is None:  # kayıt yoksa aynı imzalayanın sözleşmesine bak
+            pda = derive_agreement_pda(program_id, signer, received)[0]
     if pda is not None:
-        proof = get_proof(rpc, pda)
-        if proof is None:
+        acc = rpc.get_account(pda)
+        if acc is None:
             return out
-        out.update(proof_pda=str(pda), proof=proof, original_hash=proof["document_hash"])
+        if acc["data"][:8] == AGREEMENT_DISC:
+            return _agreement_result(out, decode_agreement(acc["data"]), pda, received.hex())
+        if acc["data"][:8] != PROOF_DISC:
+            return out
+        proof = decode_proof(acc["data"])
+        out.update(proof=proof, proof_pda=str(pda), original_hash=proof["document_hash"])
         out["status"] = "VERIFIED" if proof["document_hash"] == received.hex() else "INVALID"
         return out
 
@@ -265,6 +423,13 @@ def verify(rpc, file_bytes: bytes, pda=None, signer=None, program_id=None):
     if found:
         out.update(status="VERIFIED", proof=found[0], proof_pda=found[0]["proof_pda"], original_hash=received.hex(),
                    matches=len(found))
+        return out
+    agreements = find_agreements_by_hash(rpc, received, program_id)
+    if agreements:
+        done = [x for x in agreements if x["complete"]]
+        best = (done or agreements)[0]
+        _agreement_result(out, best, best["agreement_pda"], received.hex())
+        out["matches"] = len(agreements)
     return out
 
 

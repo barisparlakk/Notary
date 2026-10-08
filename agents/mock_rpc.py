@@ -45,11 +45,15 @@ class MockChain:
         if msg.account_keys[ix.program_id_index] != self.program_id:
             raise ValueError("bilinmeyen program")
         data = bytes(ix.data)
+        signed = {str(k) for k in msg.account_keys[: msg.header.num_required_signatures]}
+        accts = [msg.account_keys[i] for i in ix.accounts]
+        if data[:8] == onchain.CREATE_AGREEMENT_DISC:
+            return self._create_agreement(data, accts, signed)
+        if data[:8] == onchain.CO_SIGN_DISC:
+            return self._co_sign(accts, signed)
         if data[:8] != onchain.NOTARIZE_DISC:
             raise ValueError("bilinmeyen talimat")
-        accts = [msg.account_keys[i] for i in ix.accounts]
         signer, payer, proof, sysprog = accts
-        signed = {str(k) for k in msg.account_keys[: msg.header.num_required_signatures]}
         if str(signer) not in signed or str(payer) not in signed:
             raise ValueError("signer/payer imzası eksik")
         if sysprog != SYSTEM_PROGRAM_ID:
@@ -88,6 +92,51 @@ class MockChain:
         return {"lamports": 2_000_000, "owner": str(self.program_id), "executable": False, "rentEpoch": 0,
                 "space": len(raw), "data": [base64.b64encode(raw).decode(), "base64"]}
 
+    def _create_agreement(self, data, accts, signed):
+        creator, payer, agreement, sysprog = accts
+        if str(creator) not in signed or str(payer) not in signed:
+            raise ValueError("creator/payer imzası eksik")
+        if sysprog != SYSTEM_PROGRAM_ID:
+            raise ValueError("system program yanlış")
+        document_hash = data[8:40]
+        (n,) = struct.unpack_from("<I", data, 40)
+        keys = [data[44 + 32 * i:44 + 32 * (i + 1)] for i in range(n)]
+        if not 2 <= n <= onchain.MAX_PARTIES:
+            raise ValueError("BadPartyCount")
+        if len(set(keys)) != n:
+            raise ValueError("DuplicateSigner")
+        if bytes(creator) not in keys:
+            raise ValueError("CreatorNotParty")
+        expected, bump = onchain.derive_agreement_pda(self.program_id, creator, document_hash)
+        if agreement != expected:
+            raise ValueError("ConstraintSeeds")
+        if str(agreement) in self.accounts:
+            raise ValueError("account already in use")
+        now = int(time.time())
+        signed_at = [now if k == bytes(creator) else 0 for k in keys]
+        raw = onchain.AGREEMENT_DISC + b"\x01" + bytes(creator) + document_hash + struct.pack("<q", now)
+        raw += struct.pack("<I", n) + b"".join(keys) + struct.pack("<I", n) + struct.pack(f"<{n}q", *signed_at) + bytes([bump])
+        self.accounts[str(agreement)] = raw + b"\x00" * (onchain.AGREEMENT_SIZE - len(raw))
+
+    def _co_sign(self, accts, signed):
+        signer, agreement = accts
+        if str(signer) not in signed:
+            raise ValueError("signer imzası eksik")
+        raw = self.accounts.get(str(agreement))
+        if raw is None or raw[:8] != onchain.AGREEMENT_DISC:
+            raise ValueError("AccountNotInitialized")
+        a = onchain.decode_agreement(raw)
+        idx = next((i for i, p in enumerate(a["parties"]) if p["signer"] == str(signer)), None)
+        if idx is None:
+            raise ValueError("NotAParty")
+        if a["parties"][idx]["signed_at"]:
+            raise ValueError("AlreadySigned")
+        n = len(a["parties"])
+        base = 8 + 1 + 32 + 32 + 8 + 4 + 32 * n + 4  # signed_at vektörünün ilk eleman ofseti
+        patched = bytearray(raw)
+        struct.pack_into("<q", patched, base + 8 * idx, int(time.time()))
+        self.accounts[str(agreement)] = bytes(patched)
+
     # --- JSON-RPC
     def handle(self, method, params):
         result = self._handle(method, params)
@@ -125,7 +174,7 @@ class MockChain:
                     return []
                 out = []
                 for pk, raw in self.accounts.items():
-                    if all(self._memcmp(raw, f["memcmp"]) for f in params[1].get("filters", [])):
+                    if all(self._filter(raw, f) for f in params[1].get("filters", [])):
                         out.append({"pubkey": pk, "account": self._account_json(raw)})
                 return out
             if method == "requestAirdrop":
@@ -136,6 +185,12 @@ class MockChain:
             if method == "getBalance":
                 return {"value": self.balances.get(params[0], 0)}
             raise RuntimeError(f"mock_rpc: desteklenmeyen yöntem {method}")
+
+    @staticmethod
+    def _filter(raw, f):
+        if "dataSize" in f:
+            return len(raw) == f["dataSize"]
+        return MockChain._memcmp(raw, f["memcmp"])
 
     @staticmethod
     def _memcmp(raw, m):
