@@ -71,5 +71,39 @@ if (RELAY_URL) {
   check('relayed proof verifies', (await chain.verifyDocument(rpc, h2, { signer: bob.publicKey })).status === 'VERIFIED');
 }
 
+// 4) çok imzalı sözleşme: PENDING -> VERIFIED, kurallar, dataSize ile ayrışan aramalar
+{
+  const [p1, p2, p3] = [Keypair.generate(), Keypair.generate(), Keypair.generate()];
+  for (const k of [p2, p3]) await fund(k);
+  const sg = (kp) => ({ publicKey: kp.publicKey, keypair: kp });
+  const text = `e2e agreement ${Date.now()}`;
+  const ah = await hashOf(text);
+  await fund(p1);
+  const created = await rpc.createAgreement({ signer: sg(p1), hashHex: ah, signers: [p1.publicKey, p2.publicKey, p3.publicKey] });
+  check('create_agreement: creator counts as signed', created.agreement.signed_count === 1 && !created.agreement.complete);
+  check('verify is PENDING', (await chain.verifyDocument(rpc, ah, { pda: created.agreement_pda })).status === 'PENDING');
+  let outsider = false;
+  try { await rpc.coSign({ signer: sg(Keypair.generate()), agreementPda: created.agreement_pda }); } catch { outsider = true; }
+  check('non-party cannot co_sign (rejected by program)', outsider);
+  await rpc.coSign({ signer: sg(p2), agreementPda: created.agreement_pda });
+  let twice = false;
+  try { await rpc.coSign({ signer: sg(p2), agreementPda: created.agreement_pda }); } catch { twice = true; }
+  check('second signature by the same party rejected', twice);
+  await rpc.coSign({ signer: sg(p3), agreementPda: created.agreement_pda });
+  for (const [label, opts] of [['pda', { pda: created.agreement_pda }], ['creator', { signer: p1.publicKey }], ['hash search', {}]]) {
+    check(`agreement VERIFIED by ${label}`, (await chain.verifyDocument(rpc, ah, opts)).status === 'VERIFIED');
+  }
+  check('agreement changed file -> INVALID', (await chain.verifyDocument(rpc, await hashOf('x'), { pda: created.agreement_pda })).status === 'INVALID');
+  check('list agreements for a party', (await rpc.listAgreementsFor(p3.publicKey)).some((x) => x.agreement_pda === created.agreement_pda));
+  check('proof lookups ignore agreement accounts', (await rpc.findByHash(ah)).length === 0);
+  if (RELAY_URL) {
+    const [q1, q2] = [Keypair.generate(), Keypair.generate()]; // SOL'ü yok
+    const rh = await hashOf(`relayed agreement ${Date.now()}`);
+    const rc = await rpc.createAgreement({ signer: sg(q1), hashHex: rh, signers: [q1.publicKey, q2.publicKey], relay: RELAY_URL });
+    await rpc.coSign({ signer: sg(q2), agreementPda: rc.agreement_pda, relay: RELAY_URL });
+    check('relayed agreement completes (parties have 0 SOL)', (await chain.verifyDocument(rpc, rh, { pda: rc.agreement_pda })).status === 'VERIFIED');
+  }
+}
+
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

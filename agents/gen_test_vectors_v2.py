@@ -37,5 +37,35 @@ v["golden"] = {
     "proof_account_receiver_one_parent_hex": account(receiver, [parent], v["bump"]),
     "proof_account_no_receiver_no_parents_hex": account(None, [], v["bump"]),
 }
+# --- çok imzalı sözleşme (create_agreement / co_sign)
+parties = [Keypair.from_seed(bytes([0x42]) * 32).pubkey(), Keypair.from_seed(bytes([0x43]) * 32).pubkey(),
+           Keypair.from_seed(bytes([0x44]) * 32).pubkey()]
+ag_pda, ag_bump = onchain.derive_agreement_pda(v["program_id"], parties[0], h)
+
+
+def agreement_account(signed):
+    n = len(parties)
+    raw = onchain.AGREEMENT_DISC + b"\x01" + bytes(parties[0]) + h + struct.pack("<q", created)
+    raw += struct.pack("<I", n) + b"".join(bytes(p) for p in parties) + struct.pack("<I", n)
+    raw += struct.pack(f"<{n}q", *signed) + bytes([ag_bump])
+    return (raw + b"\x00" * (onchain.AGREEMENT_SIZE - len(raw))).hex()
+
+
+v["agreement"] = {
+    "creator": str(parties[0]),
+    "parties": [str(p) for p in parties],
+    "agreement_pda": str(ag_pda),
+    "bump": ag_bump,
+    "create_agreement_discriminator_hex": onchain.CREATE_AGREEMENT_DISC.hex(),
+    "co_sign_discriminator_hex": onchain.CO_SIGN_DISC.hex(),
+    "account_discriminator_hex": onchain.AGREEMENT_DISC.hex(),
+    "account_size": onchain.AGREEMENT_SIZE,
+    "party_offset": onchain.AGREEMENT_PARTY_OFFSET,
+    "create_agreement_data_hex": onchain.encode_create_agreement_data(h, parties).hex(),
+    "account_creator_signed_hex": agreement_account([created, 0, 0]),
+    "account_all_signed_hex": agreement_account([created, created + 60, created + 120]),
+    "created_at_unix": created,
+}
+v["account_size_proof"] = onchain.PROOF_SIZE
 path.write_text(json.dumps(v, indent=2) + "\n")
 print("golden vektörler yazıldı")

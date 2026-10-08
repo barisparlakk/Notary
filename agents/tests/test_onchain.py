@@ -281,3 +281,20 @@ def test_agreement_encoding_constants():
     data = onchain.encode_create_agreement_data(h, ks)
     assert data[:8] == onchain.CREATE_AGREEMENT_DISC and len(data) == 8 + 32 + 4 + 64
     assert onchain.CO_SIGN_DISC != onchain.NOTARIZE_DISC
+
+
+def test_agreement_golden_vectors():
+    g = V["agreement"]
+    h = bytes.fromhex(V["document_hash"])
+    assert onchain.CREATE_AGREEMENT_DISC.hex() == g["create_agreement_discriminator_hex"]
+    assert onchain.CO_SIGN_DISC.hex() == g["co_sign_discriminator_hex"]
+    assert onchain.AGREEMENT_DISC.hex() == g["account_discriminator_hex"]
+    assert (onchain.AGREEMENT_SIZE, onchain.AGREEMENT_PARTY_OFFSET) == (g["account_size"], g["party_offset"])
+    assert onchain.encode_create_agreement_data(h, g["parties"]).hex() == g["create_agreement_data_hex"]
+    pda, bump = onchain.derive_agreement_pda(V["program_id"], g["creator"], h)
+    assert (str(pda), bump) == (g["agreement_pda"], g["bump"])
+    part = onchain.decode_agreement(bytes.fromhex(g["account_creator_signed_hex"]))
+    assert part["signed_count"] == 1 and not part["complete"] and part["creator"] == g["creator"]
+    full = onchain.decode_agreement(bytes.fromhex(g["account_all_signed_hex"]))
+    assert full["complete"] and [p["signer"] for p in full["parties"]] == g["parties"]
+    assert full["parties"][2]["signed_at"] == g["created_at_unix"] + 120 and full["bump"] == g["bump"]
