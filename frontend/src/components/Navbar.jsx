@@ -10,6 +10,7 @@ import WalletButton from './WalletButton';
 const NAV = [
   { value: 'check', label: 'Check' },
   { value: 'record', label: 'Record' },
+  { value: 'agreements', label: 'Agreements' },
   { value: 'records', label: 'Records' },
 ];
 

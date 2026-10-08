@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import Navbar from './components/Navbar';
 import Check from './components/Check';
 import Record from './components/Record';
+import Agreements from './components/Agreements';
 import LedgerExplorer from './components/LedgerExplorer';
 
 // Eski bağlantılar (daha önce verilmiş QR ve sertifikalar) çalışmaya devam eder: ?tab=verify&pda=...
 const LEGACY = { verify: 'check', pipeline: 'check', notarize: 'record', ledger: 'records' };
-const TABS = ['check', 'record', 'records'];
+const TABS = ['check', 'record', 'agreements', 'records'];
 
 export default function App() {
   const params = new URLSearchParams(window.location.search);
@@ -24,6 +25,7 @@ export default function App() {
       <main id="main-content" className="flex-1 w-full max-w-page mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
         {activeTab === 'check' && <Check initialPda={initialPda} />}
         {activeTab === 'record' && <Record />}
+        {activeTab === 'agreements' && <Agreements />}
         {activeTab === 'records' && <LedgerExplorer />}
       </main>
 

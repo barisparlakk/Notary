@@ -16,7 +16,6 @@ import { buildCertificate, lineage } from '../lib/chain';
 import { addIdentity, getIdentities, getMeta, removeIdentity } from '../lib/localMeta';
 import Dialog from './Dialog';
 import Tabs from './Tabs';
-import AgreementsPanel from './AgreementsPanel';
 import { downloadCertificatePdf } from '../lib/certificatePdf';
 
 const HEX64 = /^[0-9a-f]{64}$/i;
@@ -24,7 +23,6 @@ const HEX64 = /^[0-9a-f]{64}$/i;
 export default function LedgerExplorer() {
   const { chain, signer, isDemo, cluster, programId } = useNotary();
   const [activeSection, setActiveSection] = useState('proofs');
-  const [agreementCount, setAgreementCount] = useState(0);
   const [proofs, setProofs] = useState([]);
   const [listLabel, setListLabel] = useState('Signed by you');
   const [loading, setLoading] = useState(false);
@@ -54,13 +52,6 @@ export default function LedgerExplorer() {
 
   useEffect(() => { loadMine(); }, [loadMine]);
 
-  // Sekme etiketindeki sözleşme sayısı, bölüm açılmadan da doğru görünsün
-  useEffect(() => {
-    let cancelled = false;
-    if (!signer) { setAgreementCount(0); return undefined; }
-    chain.listAgreementsFor(signer.publicKey).then((l) => { if (!cancelled) setAgreementCount(l.length); }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [chain, signer]);
 
   // Herkese açık zincir araması: SHA-256, PDA ya da imzalayan adresi
   const handleLookup = async () => {
@@ -182,7 +173,6 @@ export default function LedgerExplorer() {
               label="Records sections"
               options={[
                 { value: 'proofs', label: `Recorded files (${proofs.length})` },
-                { value: 'agreements', label: `Agreements (${agreementCount})` },
                 { value: 'agents', label: `People (${identities.length + (signer ? 1 : 0)})` },
               ]}
               value={activeSection}
@@ -338,9 +328,6 @@ export default function LedgerExplorer() {
 
         </div>
       )}
-
-      {/* Agreements Section: çok taraflı sözleşmeler */}
-      {activeSection === 'agreements' && <AgreementsPanel onLoaded={setAgreementCount} />}
 
       {/* Identities Section */}
       {activeSection === 'agents' && (
