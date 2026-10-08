@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import QRCode from 'qrcode';
 import { PublicKey } from '@solana/web3.js';
 import {
   UploadCloud,
@@ -126,7 +125,7 @@ export default function NotarizeStudio({ onProofCreated }) {
       setMeta(out.proof_pda, { file_name: file.name || 'document', file_size: file.size || 0, tx_signature: out.tx_signature });
       const res = { ...out, certificate, file_name: file.name || 'document' };
       setResult(res);
-      setQr(await QRCode.toDataURL(certificate.verify_url, { margin: 1, width: 160 }));
+      setQr(await (await import('qrcode')).default.toDataURL(certificate.verify_url, { margin: 1, width: 160 }));
       if (onProofCreated) onProofCreated(res);
     } catch (err) {
       const msg = String(err.message || err);

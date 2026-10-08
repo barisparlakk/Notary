@@ -1,8 +1,6 @@
 // Uygulama genelinde zincir istemcisi + imzalayan (cüzdan ya da DEMO anahtarı).
-import React, { createContext, useContext, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { ConnectionProvider, WalletProvider, useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
-import { SolflareWalletAdapter } from '@solana/wallet-adapter-solflare';
 import { Keypair } from '@solana/web3.js';
 import { EFFECTIVE_PROGRAM_ID, RPC_URL, CLUSTER, USE_MOCK } from './config';
 import { MockChain, RpcChain } from './chain';
@@ -46,7 +44,15 @@ function NotaryState({ children }) {
 }
 
 export function NotaryProvider({ children }) {
-  const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], []);
+  // Cüzdan adaptörleri ayrı parçada yüklenir: ana paketi küçük tutar, sayfa açılışını geciktirmez.
+  const [wallets, setWallets] = useState([]);
+  useEffect(() => {
+    let off = false;
+    Promise.all([import('@solana/wallet-adapter-phantom'), import('@solana/wallet-adapter-solflare')]).then(([p, s]) => {
+      if (!off) setWallets([new p.PhantomWalletAdapter(), new s.SolflareWalletAdapter()]);
+    });
+    return () => { off = true; };
+  }, []);
   return (
     <ConnectionProvider endpoint={RPC_URL} config={{ commitment: 'confirmed' }}>
       <WalletProvider wallets={wallets} autoConnect>

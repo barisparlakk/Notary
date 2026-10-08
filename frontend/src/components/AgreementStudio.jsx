@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import QRCode from 'qrcode';
 import { PublicKey } from '@solana/web3.js';
 import { UploadCloud, Sparkles, Cpu, Check, Copy, Send, ArrowRight, ArrowUpRight, Download, Plus, X, Users, AlertTriangle, Clock } from 'lucide-react';
 import { useNotary, shortKey } from '../lib/notary';
@@ -79,7 +78,7 @@ export default function AgreementStudio() {
       });
       setMeta(out.agreement_pda, { file_name: file.name || 'agreement', tx_signature: out.tx_signature });
       setResult({ ...out, certificate });
-      setQr(await QRCode.toDataURL(certificate.verify_url, { margin: 1, width: 160 }));
+      setQr(await (await import('qrcode')).default.toDataURL(certificate.verify_url, { margin: 1, width: 160 }));
     } catch (err) {
       setError(String(err.message || err));
     } finally {
