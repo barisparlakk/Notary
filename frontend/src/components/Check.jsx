@@ -134,8 +134,8 @@ export default function Check({ initialPda = '' }) {
 
           {isDemo && (
             <div className="flex flex-wrap gap-2 text-sm">
-              <button type="button" onClick={() => trySample(false)} className="cal-btn-secondary px-3 py-1.5 rounded-lg">Try a sample file</button>
-              <button type="button" onClick={() => trySample(true)} className="cal-btn-secondary px-3 py-1.5 rounded-lg">Try a changed sample</button>
+              <button type="button" onClick={() => trySample(false)} className="btn-secondary px-3 py-1.5 rounded-lg">Try a sample file</button>
+              <button type="button" onClick={() => trySample(true)} className="btn-secondary px-3 py-1.5 rounded-lg">Try a changed sample</button>
             </div>
           )}
 
@@ -146,11 +146,11 @@ export default function Check({ initialPda = '' }) {
                 type="text"
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
-                className="cal-input font-mono text-xs"
+                className="field font-mono text-xs"
                 placeholder="Record address, or the signer's address"
                 aria-label="Record address or signer address"
               />
-              <button type="button" disabled={!hash || busy} onClick={() => run(hash, reference)} className="cal-btn-secondary px-3 py-1.5 rounded-lg disabled:opacity-40">Check again</button>
+              <button type="button" disabled={!hash || busy} onClick={() => run(hash, reference)} className="btn-secondary px-3 py-1.5 rounded-lg disabled:opacity-40">Check again</button>
             </div>
           </details>
         </div>
@@ -246,10 +246,10 @@ export default function Check({ initialPda = '' }) {
 
             {certificate && (
               <div className="mt-6 flex flex-wrap gap-2">
-                <button type="button" onClick={() => downloadCertificatePdf(certificate, `notary-certificate-${result.proof_pda.slice(0, 8)}.pdf`)} className="cal-btn-primary px-4 py-2 rounded-lg text-sm">
+                <button type="button" onClick={() => downloadCertificatePdf(certificate, `notary-certificate-${result.proof_pda.slice(0, 8)}.pdf`)} className="btn-primary px-4 py-2 rounded-lg text-sm">
                   <Download className="w-4 h-4 mr-2" />Download certificate (PDF)
                 </button>
-                <button type="button" onClick={downloadJson} className="cal-btn-secondary px-4 py-2 rounded-lg text-sm">Download as JSON</button>
+                <button type="button" onClick={downloadJson} className="btn-secondary px-4 py-2 rounded-lg text-sm">Download as JSON</button>
               </div>
             )}
           </div>

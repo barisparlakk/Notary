@@ -15,7 +15,7 @@ export default function Agreements() {
             Files that several people must sign. An agreement counts as agreed only when every party has signed the same file, and each signature is timed by the Solana clock.
           </p>
         </div>
-        <button type="button" onClick={() => setCreating((c) => !c)} aria-expanded={creating} className={creating ? 'cal-btn-secondary px-4 py-2 rounded-lg text-sm' : 'cal-btn-primary px-4 py-2 rounded-lg text-sm'}>
+        <button type="button" onClick={() => setCreating((c) => !c)} aria-expanded={creating} className={creating ? 'btn-secondary px-4 py-2 rounded-lg text-sm' : 'btn-primary px-4 py-2 rounded-lg text-sm'}>
           {creating ? 'Close the form' : 'New agreement'}
         </button>
       </header>

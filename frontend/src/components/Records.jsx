@@ -111,8 +111,8 @@ export default function Records() {
       {section === 'files' && (
         <section className="mt-8" aria-label="Recorded files">
           <form onSubmit={(e) => { e.preventDefault(); lookup(); }} className="flex gap-2 max-w-2xl">
-            <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} className="cal-input text-sm" placeholder="Search by file fingerprint, record address or signer" aria-label="Search records" />
-            <button type="submit" className="cal-btn-secondary px-4 py-2 rounded-lg text-sm shrink-0">Look up</button>
+            <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} className="field text-sm" placeholder="Search by file fingerprint, record address or signer" aria-label="Search records" />
+            <button type="submit" className="btn-secondary px-4 py-2 rounded-lg text-sm shrink-0">Look up</button>
           </form>
           {error && <p className="mt-2 text-sm text-altered" role="alert">{error}</p>}
 
@@ -133,7 +133,7 @@ export default function Records() {
                     </p>
                     <p className="font-mono text-xs text-gray-500 truncate" title={r.document_hash}>{r.document_hash}</p>
                   </div>
-                  <button type="button" onClick={() => open(r)} className="cal-btn-secondary px-4 py-2 rounded-lg text-sm">Details</button>
+                  <button type="button" onClick={() => open(r)} className="btn-secondary px-4 py-2 rounded-lg text-sm">Details</button>
                 </li>
               ))}
             </ul>
@@ -153,7 +153,7 @@ export default function Records() {
                   <p className="font-medium">{p.label}</p>
                   <p className="font-mono text-xs text-gray-500 break-all">{p.address} <CopyButton text={p.address} label="Copy address" /></p>
                 </div>
-                <button type="button" onClick={() => showRecordsOf(p.address)} className="cal-btn-secondary px-3 py-1.5 rounded-lg text-sm">See records</button>
+                <button type="button" onClick={() => showRecordsOf(p.address)} className="btn-secondary px-3 py-1.5 rounded-lg text-sm">See records</button>
                 {!p.self && <button type="button" onClick={() => setPeople(removeIdentity(p.address))} className="text-sm text-gray-600 underline hover:text-altered">Remove</button>}
               </li>
             ))}
@@ -163,14 +163,14 @@ export default function Records() {
             <h2 className="text-base font-semibold">Add a person</h2>
             <div>
               <label htmlFor="person-label" className="block text-sm text-gray-700 mb-1.5">Name</label>
-              <input id="person-label" required value={label} onChange={(e) => setLabel(e.target.value)} className="cal-input text-sm" placeholder="For example, Ahmet" />
+              <input id="person-label" required value={label} onChange={(e) => setLabel(e.target.value)} className="field text-sm" placeholder="For example, Ahmet" />
             </div>
             <div>
               <label htmlFor="person-address" className="block text-sm text-gray-700 mb-1.5">Wallet address</label>
-              <input id="person-address" required value={address} onChange={(e) => setAddress(e.target.value)} className="cal-input font-mono text-xs" placeholder="Solana address" />
+              <input id="person-address" required value={address} onChange={(e) => setAddress(e.target.value)} className="field font-mono text-xs" placeholder="Solana address" />
               {peopleError && <p className="mt-1.5 text-sm text-altered" role="alert">{peopleError}</p>}
             </div>
-            <button type="submit" className="cal-btn-primary px-4 py-2 rounded-lg text-sm">Save person</button>
+            <button type="submit" className="btn-primary px-4 py-2 rounded-lg text-sm">Save person</button>
           </form>
         </section>
       )}
@@ -197,10 +197,10 @@ export default function Records() {
             )}
           </dl>
           <div className="flex flex-wrap gap-2 pt-1">
-            <button type="button" onClick={() => downloadCertificatePdf(certificateOf(selected), `notary-certificate-${selected.proof_pda.slice(0, 8)}.pdf`)} className="cal-btn-primary px-4 py-2 rounded-lg text-sm">Download certificate (PDF)</button>
-            <button type="button" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/?tab=verify&pda=${selected.proof_pda}`)} className="cal-btn-secondary px-4 py-2 rounded-lg text-sm">Copy link to check</button>
+            <button type="button" onClick={() => downloadCertificatePdf(certificateOf(selected), `notary-certificate-${selected.proof_pda.slice(0, 8)}.pdf`)} className="btn-primary px-4 py-2 rounded-lg text-sm">Download certificate (PDF)</button>
+            <button type="button" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/?tab=verify&pda=${selected.proof_pda}`)} className="btn-secondary px-4 py-2 rounded-lg text-sm">Copy link to check</button>
             {!isDemo && (
-              <a href={`https://explorer.solana.com/address/${selected.proof_pda}?cluster=${cluster}`} target="_blank" rel="noopener noreferrer" className="cal-btn-secondary px-4 py-2 rounded-lg text-sm">View on Solana Explorer</a>
+              <a href={`https://explorer.solana.com/address/${selected.proof_pda}?cluster=${cluster}`} target="_blank" rel="noopener noreferrer" className="btn-secondary px-4 py-2 rounded-lg text-sm">View on Solana Explorer</a>
             )}
           </div>
         </Dialog>

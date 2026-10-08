@@ -145,7 +145,7 @@ export default function Record() {
         <Step n={2} title="Add details (optional)">
           <div>
             <label htmlFor="receiver" className="block text-sm text-gray-700 mb-1.5">Who is it for?</label>
-            <input id="receiver" type="text" value={receiver} onChange={(e) => setReceiver(e.target.value.trim())} className="cal-input font-mono text-xs" placeholder="Wallet address of the receiver" />
+            <input id="receiver" type="text" value={receiver} onChange={(e) => setReceiver(e.target.value.trim())} className="field font-mono text-xs" placeholder="Wallet address of the receiver" />
             {receiverError && <p className="mt-1.5 text-sm text-altered">{receiverError}</p>}
           </div>
 
@@ -154,8 +154,8 @@ export default function Record() {
             <div className="mt-3 space-y-3">
               <p className="text-gray-600">Add the fingerprints of up to {MAX_PARENTS} files it builds on. Anyone can then see what a decision rested on.</p>
               <div className="flex gap-2">
-                <input type="text" value={parentInput} onChange={(e) => setParentInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addParent(); } }} className="cal-input font-mono text-xs" placeholder="64-character fingerprint" aria-label="Fingerprint of a related file" />
-                <button type="button" onClick={() => addParent()} className="cal-btn-secondary px-3 py-1.5 rounded-lg"><Plus className="w-4 h-4 mr-1" />Add</button>
+                <input type="text" value={parentInput} onChange={(e) => setParentInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addParent(); } }} className="field font-mono text-xs" placeholder="64-character fingerprint" aria-label="Fingerprint of a related file" />
+                <button type="button" onClick={() => addParent()} className="btn-secondary px-3 py-1.5 rounded-lg"><Plus className="w-4 h-4 mr-1" />Add</button>
               </div>
               {recent.length > 0 && parents.length < MAX_PARENTS && (
                 <div className="flex flex-wrap gap-1.5">
@@ -201,7 +201,7 @@ export default function Record() {
 
           {error && <p className="text-sm text-altered" role="alert">{error}</p>}
 
-          <button type="submit" disabled={!file || !signer || !!receiverError || busy} className="cal-btn-primary px-5 py-2.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed">
+          <button type="submit" disabled={!file || !signer || !!receiverError || busy} className="btn-primary px-5 py-2.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed">
             {busy ? 'Waiting for your wallet and the network…' : isDemo ? 'Record this file (demo)' : 'Record this file'}
           </button>
         </Step>
@@ -230,10 +230,10 @@ export default function Record() {
                 )}
               </dl>
               <div className="mt-6 flex flex-wrap gap-2">
-                <button type="button" onClick={() => downloadCertificatePdf(result.certificate, `notary-certificate-${result.proof_pda.slice(0, 8)}.pdf`)} className="cal-btn-primary px-4 py-2 rounded-lg text-sm">
+                <button type="button" onClick={() => downloadCertificatePdf(result.certificate, `notary-certificate-${result.proof_pda.slice(0, 8)}.pdf`)} className="btn-primary px-4 py-2 rounded-lg text-sm">
                   <Download className="w-4 h-4 mr-2" />Download certificate (PDF)
                 </button>
-                <button type="button" onClick={downloadJson} className="cal-btn-secondary px-4 py-2 rounded-lg text-sm">Download as JSON</button>
+                <button type="button" onClick={downloadJson} className="btn-secondary px-4 py-2 rounded-lg text-sm">Download as JSON</button>
                 <CopyLink text={result.certificate.verify_url} />
               </div>
             </div>
@@ -256,7 +256,7 @@ export default function Record() {
 function CopyLink({ text }) {
   const [done, setDone] = useState(false);
   return (
-    <button type="button" onClick={() => { navigator.clipboard.writeText(text); setDone(true); setTimeout(() => setDone(false), 1800); }} className="cal-btn-secondary px-4 py-2 rounded-lg text-sm">
+    <button type="button" onClick={() => { navigator.clipboard.writeText(text); setDone(true); setTimeout(() => setDone(false), 1800); }} className="btn-secondary px-4 py-2 rounded-lg text-sm">
       {done ? 'Link copied' : 'Copy link to check'}
     </button>
   );

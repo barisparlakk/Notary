@@ -110,8 +110,8 @@ export default function AgreementStudio({ onCreated }) {
             ))}
           </ul>
           <div className="flex gap-2">
-            <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addParty(); } }} className="cal-input font-mono text-xs" placeholder="Wallet address of another party" aria-label="Wallet address of another party" />
-            <button type="button" onClick={() => addParty()} className="cal-btn-secondary px-3 py-1.5 rounded-lg"><Plus className="w-4 h-4 mr-1" />Add</button>
+            <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addParty(); } }} className="field font-mono text-xs" placeholder="Wallet address of another party" aria-label="Wallet address of another party" />
+            <button type="button" onClick={() => addParty()} className="btn-secondary px-3 py-1.5 rounded-lg"><Plus className="w-4 h-4 mr-1" />Add</button>
           </div>
           {(known.length > 0 || isDemo) && parties.length < MAX_PARTIES && (
             <div className="flex flex-wrap gap-1.5">
@@ -134,7 +134,7 @@ export default function AgreementStudio({ onCreated }) {
           )}
           {addressPreview && <p className="text-xs text-gray-500">The agreement will live at <span className="font-mono break-all">{addressPreview}</span></p>}
           {error && <p className="text-sm text-altered" role="alert">{error}</p>}
-          <button type="submit" disabled={!file || !signer || parties.length < 2 || busy} className="cal-btn-primary px-5 py-2.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed">
+          <button type="submit" disabled={!file || !signer || parties.length < 2 || busy} className="btn-primary px-5 py-2.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed">
             {busy ? 'Waiting for your wallet and the network…' : isDemo ? 'Create agreement (demo)' : 'Create agreement'}
           </button>
           {parties.length < 2 && <p className="text-sm text-gray-600">Add at least one more party.</p>}
@@ -151,8 +151,8 @@ export default function AgreementStudio({ onCreated }) {
               <p className="mt-3 text-gray-600 max-w-md leading-relaxed">Send the file and the link below to the other parties. The agreement is binding once all of them have signed.</p>
               <dl className="mt-6"><Row label="Agreement address"><span className="font-mono text-xs">{result.agreement_pda}</span> <CopyButton text={result.agreement_pda} /></Row></dl>
               <div className="mt-5 flex flex-wrap gap-2">
-                <button type="button" onClick={() => downloadCertificatePdf(result.certificate, `notary-agreement-${result.agreement_pda.slice(0, 8)}.pdf`)} className="cal-btn-secondary px-4 py-2 rounded-lg text-sm">Download certificate (PDF)</button>
-                <button type="button" onClick={() => { navigator.clipboard.writeText(result.certificate.verify_url); }} className="cal-btn-secondary px-4 py-2 rounded-lg text-sm">Copy link to check</button>
+                <button type="button" onClick={() => downloadCertificatePdf(result.certificate, `notary-agreement-${result.agreement_pda.slice(0, 8)}.pdf`)} className="btn-secondary px-4 py-2 rounded-lg text-sm">Download certificate (PDF)</button>
+                <button type="button" onClick={() => { navigator.clipboard.writeText(result.certificate.verify_url); }} className="btn-secondary px-4 py-2 rounded-lg text-sm">Copy link to check</button>
               </div>
             </div>
             <Seal key={docHash} hash={docHash} state="pending" size={180} animate demo={isDemo} />

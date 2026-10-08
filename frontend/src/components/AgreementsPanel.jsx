@@ -79,9 +79,9 @@ export default function AgreementsPanel({ refreshKey = 0 }) {
                 </ul>
               </div>
               <div className="flex flex-wrap md:flex-col gap-2 md:items-stretch">
-                {mine.length > 0 && <button type="button" onClick={() => setSigning(a)} className="cal-btn-primary px-4 py-2 rounded-lg text-sm">Sign</button>}
-                <button type="button" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/?tab=verify&pda=${a.agreement_pda}`)} className="cal-btn-secondary px-4 py-2 rounded-lg text-sm">Copy link to check</button>
-                <button type="button" onClick={() => downloadCertificatePdf(certificate(a), `notary-agreement-${a.agreement_pda.slice(0, 8)}.pdf`)} className="cal-btn-secondary px-4 py-2 rounded-lg text-sm">Certificate (PDF)</button>
+                {mine.length > 0 && <button type="button" onClick={() => setSigning(a)} className="btn-primary px-4 py-2 rounded-lg text-sm">Sign</button>}
+                <button type="button" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/?tab=verify&pda=${a.agreement_pda}`)} className="btn-secondary px-4 py-2 rounded-lg text-sm">Copy link to check</button>
+                <button type="button" onClick={() => downloadCertificatePdf(certificate(a), `notary-agreement-${a.agreement_pda.slice(0, 8)}.pdf`)} className="btn-secondary px-4 py-2 rounded-lg text-sm">Certificate (PDF)</button>
               </div>
             </li>
           );
@@ -139,7 +139,7 @@ function SignModal({ agreement, options, onClose, onSigned }) {
       {options.length > 1 && (
         <div>
           <label htmlFor="sign-as" className="block text-sm text-gray-700 mb-1.5">Sign as</label>
-          <select id="sign-as" value={who} onChange={(e) => setWho(Number(e.target.value))} className="cal-input text-sm">
+          <select id="sign-as" value={who} onChange={(e) => setWho(Number(e.target.value))} className="field text-sm">
             {options.map((o, i) => <option key={o.label} value={i}>{o.label}</option>)}
           </select>
         </div>
@@ -152,8 +152,8 @@ function SignModal({ agreement, options, onClose, onSigned }) {
       )}
       {error && <p className="text-sm text-altered" role="alert">{error}</p>}
       <div className="flex justify-end gap-2 pt-1">
-        <button type="button" onClick={onClose} className="cal-btn-secondary px-4 py-2 rounded-lg text-sm">Cancel</button>
-        <button type="button" onClick={sign} disabled={!matches || busy} className="cal-btn-primary px-4 py-2 rounded-lg text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+        <button type="button" onClick={onClose} className="btn-secondary px-4 py-2 rounded-lg text-sm">Cancel</button>
+        <button type="button" onClick={sign} disabled={!matches || busy} className="btn-primary px-4 py-2 rounded-lg text-sm disabled:opacity-40 disabled:cursor-not-allowed">
           {busy ? 'Waiting for your wallet…' : `Sign as ${options[who]?.label ?? ''}`}
         </button>
       </div>

@@ -51,7 +51,7 @@ export default function Dialog({ title, onClose, children, className = '' }) {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`cal-card max-w-xl w-full p-6 space-y-4 shadow-2xl bg-white border border-gray-300 max-h-[90vh] overflow-y-auto ${className}`}
+        className={`panel max-w-xl w-full p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto ${className}`}
       >
         <div className="flex items-center justify-between pb-3 border-b border-gray-100">
           <span id={titleId} className="text-sm font-bold text-gray-900 font-sans">{title}</span>

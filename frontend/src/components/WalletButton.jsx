@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Wallet, LogOut, ExternalLink } from 'lucide-react';
 import { useNotary, shortKey } from '../lib/notary';
 
-// Mevcut tasarım diliyle (cal-btn-*, cal-card) cüzdan bağlama düğmesi. Hazır wallet-adapter arayüzü kullanılmaz.
+// Mevcut tasarım diliyle (btn-*, field) cüzdan bağlama düğmesi. Hazır wallet-adapter arayüzü kullanılmaz.
 export default function WalletButton() {
   const { wallet, signer, isDemo } = useNotary();
   const [open, setOpen] = useState(false);
@@ -30,21 +30,21 @@ export default function WalletButton() {
   const pick = (name) => { setError(''); wallet.select(name); setPending(true); };
 
   const connected = signer?.kind === 'wallet';
-  const label = connected ? `${signer.label} · ${shortKey(signer.publicKey)}` : isDemo && signer ? `Demo · ${shortKey(signer.publicKey)}` : 'Connect wallet';
+  const label = connected ? `${signer.label} ${shortKey(signer.publicKey)}` : isDemo && signer ? `Demo wallet ${shortKey(signer.publicKey)}` : 'Connect wallet';
 
   return (
     <div className="relative" ref={ref}>
-      <button ref={trigger} onClick={() => setOpen((o) => !o)} aria-haspopup="true" aria-expanded={open} className="cal-btn-primary flex items-center space-x-1.5 text-xs py-1.5 px-3 rounded-full">
+      <button ref={trigger} onClick={() => setOpen((o) => !o)} aria-haspopup="true" aria-expanded={open} className="btn-primary flex items-center space-x-1.5 text-xs py-1.5 px-3 rounded-lg">
         <Wallet className="w-3 h-3" />
-        <span className="font-mono">{label}</span>
+        <span>{label}</span>
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-64 cal-card p-3 space-y-2 z-50" role="group" aria-label="Wallet">
+        <div className="absolute right-0 mt-2 w-64 panel p-3 space-y-2 z-50" role="group" aria-label="Wallet">
           {connected ? (
             <>
               <div className="text-xs font-mono text-gray-500 break-all">{String(signer.publicKey)}</div>
-              <button onClick={() => { wallet.disconnect(); setOpen(false); }} className="cal-btn-secondary w-full py-1.5 text-xs rounded-lg flex items-center justify-center space-x-1.5">
+              <button onClick={() => { wallet.disconnect(); setOpen(false); }} className="btn-secondary w-full py-1.5 text-xs rounded-lg flex items-center justify-center space-x-1.5">
                 <LogOut className="w-3 h-3" /><span>Disconnect</span>
               </button>
             </>
@@ -54,11 +54,11 @@ export default function WalletButton() {
               {wallet.wallets.map((w) => {
                 const installed = w.readyState === 'Installed' || w.readyState === 'Loadable';
                 return installed ? (
-                  <button key={w.adapter.name} onClick={() => pick(w.adapter.name)} className="cal-btn-secondary w-full py-1.5 px-2.5 text-xs rounded-lg flex items-center justify-between">
+                  <button key={w.adapter.name} onClick={() => pick(w.adapter.name)} className="btn-secondary w-full py-1.5 px-2.5 text-xs rounded-lg flex items-center justify-between">
                     <span>{w.adapter.name}</span><span className="text-xs text-emerald-600">Detected</span>
                   </button>
                 ) : (
-                  <a key={w.adapter.name} href={w.adapter.url} target="_blank" rel="noopener noreferrer" className="cal-btn-secondary w-full py-1.5 px-2.5 text-xs rounded-lg flex items-center justify-between">
+                  <a key={w.adapter.name} href={w.adapter.url} target="_blank" rel="noopener noreferrer" className="btn-secondary w-full py-1.5 px-2.5 text-xs rounded-lg flex items-center justify-between">
                     <span>{w.adapter.name}</span><span className="text-xs text-gray-500 flex items-center space-x-1"><span>Install</span><ExternalLink className="w-2.5 h-2.5" /></span>
                   </a>
                 );

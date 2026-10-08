@@ -23,7 +23,7 @@ export default function FileDrop({ id, onFile, title, subtitle, compact = false 
         e.preventDefault();
         if (e.dataTransfer.files?.[0]) onFile(e.dataTransfer.files[0]);
       }}
-      className={`border-2 border-dashed border-gray-200 hover:border-gray-400 rounded-2xl ${compact ? 'p-6' : 'p-8'} text-center cursor-pointer transition-colors bg-gray-50/50 hover:bg-white`}
+      className={`border-2 border-dashed border-gray-200 hover:border-gray-400 rounded-xl ${compact ? 'p-6' : 'p-8'} text-center cursor-pointer transition-colors bg-gray-50/50 hover:bg-white`}
     >
       <input
         id={id}
@@ -37,7 +37,7 @@ export default function FileDrop({ id, onFile, title, subtitle, compact = false 
         <UploadCloud className={compact ? 'w-5 h-5' : 'w-6 h-6'} />
       </div>
       <div className="text-sm font-bold text-gray-900">{title}</div>
-      {subtitle && <div className="text-xs text-gray-500 mt-1 font-mono">{subtitle}</div>}
+      {subtitle && <div className="text-xs text-gray-500 mt-1">{subtitle}</div>}
     </div>
   );
 }
