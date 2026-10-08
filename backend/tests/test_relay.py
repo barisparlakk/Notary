@@ -29,6 +29,8 @@ def env(monkeypatch):
     sent = []
 
     async def fake_rpc(method, params):
+        if method == "getBalance":
+            return {"value": 1_000_000_000}
         if method == "sendTransaction":
             sent.append(params[0])
             return "5" * 87 + "A"
@@ -69,7 +71,8 @@ def post(client, tx):
 
 def test_info(client):
     body = client.get("/relay/info").json()
-    assert body == {"enabled": True, "program_id": str(PROGRAM), "relayer_pubkey": str(RELAYER.pubkey()), "cluster": "devnet"}
+    assert body == {"enabled": True, "program_id": str(PROGRAM), "relayer_pubkey": str(RELAYER.pubkey()), "cluster": "devnet",
+                    "balance_lamports": 1_000_000_000, "low_balance": False}
 
 
 def test_happy_path_relayer_adds_its_signature(client, env):
@@ -132,8 +135,71 @@ def test_rate_limit(client, monkeypatch):
 
 def test_onchain_failure_is_reported(client, monkeypatch):
     async def failing(method, params):
+        if method == "getBalance":
+            return {"value": 1_000_000_000}
         if method == "sendTransaction":
             return "sig"
         return {"value": [{"err": {"InstructionError": [0, "Custom"]}}]}
     monkeypatch.setattr(relay, "_rpc", failing)
     assert post(client, build_tx(Keypair())[0]).status_code == 409
+
+
+def test_low_balance_disables_relay(client, monkeypatch):
+    async def poor(method, params):
+        assert method == "getBalance"
+        return {"value": 1000}
+    monkeypatch.setattr(relay, "_rpc", poor)
+    info = client.get("/relay/info").json()
+    assert info["enabled"] is False and info["low_balance"] is True
+    assert post(client, build_tx(Keypair())[0]).status_code == 503
+
+
+def test_info_survives_rpc_failure(client, monkeypatch):
+    async def down(method, params):
+        raise RuntimeError("rpc down")
+    monkeypatch.setattr(relay, "_rpc", down)
+    info = client.get("/relay/info").json()
+    assert info["enabled"] is True and info["balance_lamports"] is None
+
+
+def test_shared_counter_is_used_when_configured(client, monkeypatch):
+    """Upstash REST yapılandırılınca sayaç oradan gelir (HTTP sahte)."""
+    monkeypatch.setenv("UPSTASH_REDIS_REST_URL", "https://upstash.test")
+    monkeypatch.setenv("UPSTASH_REDIS_REST_TOKEN", "t")
+    monkeypatch.setenv("RELAY_RATE_LIMIT", "2")
+    counts = iter([1, 2, 3])
+    calls = []
+
+    class FakeResp:
+        def __init__(self, n): self.n = n
+        def json(self): return [{"result": self.n}, {"result": 1}]
+
+    class FakeHttp:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, url, headers=None, json=None):
+            calls.append((url, headers, json))
+            return FakeResp(next(counts))
+
+    monkeypatch.setattr(relay.httpx, "AsyncClient", FakeHttp)
+    codes = [post(client, build_tx(Keypair())[0]).status_code for _ in range(3)]
+    # getBalance/sendTransaction sahte _rpc üzerinden gider; AsyncClient yalnızca sayaçta kullanılır
+    assert codes == [200, 200, 429]
+    assert calls[0][0] == "https://upstash.test/pipeline" and calls[0][1]["Authorization"] == "Bearer t"
+
+
+def test_shared_counter_failure_falls_back_to_memory(client, monkeypatch):
+    monkeypatch.setenv("UPSTASH_REDIS_REST_URL", "https://upstash.test")
+    monkeypatch.setenv("UPSTASH_REDIS_REST_TOKEN", "t")
+    monkeypatch.setenv("RELAY_RATE_LIMIT", "1")
+
+    class Boom:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, *a, **k): raise RuntimeError("upstash down")
+
+    monkeypatch.setattr(relay.httpx, "AsyncClient", Boom)
+    codes = [post(client, build_tx(Keypair())[0]).status_code for _ in range(2)]
+    assert codes == [200, 429]  # bellek içi sayaç devreye girdi

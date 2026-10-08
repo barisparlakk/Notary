@@ -5,7 +5,9 @@ Güvenlik: kayıt doğruluk kaynağı DEĞİLDİR; yalnızca ücreti öder. Bu y
   - tek talimat, hedef program = PROGRAM_ID, talimat = notarize
   - ücret ödeyen (fee payer) = relayer, `signer` = relayer DEĞİL (aksi halde relayer adına sahte kayıt atılırdı)
   - `signer`'ın imzası geçerli
-Hız sınırı IP başına dakikada RELAY_RATE_LIMIT (varsayılan 10).
+Hız sınırı IP başına dakikada RELAY_RATE_LIMIT (varsayılan 10). Vercel'de her örnek ayrı bellektir; örnekler arası
+ortak sayaç için UPSTASH_REDIS_REST_URL ve UPSTASH_REDIS_REST_TOKEN verilirse sayaç Upstash'te tutulur.
+Relayer bakiyesi RELAY_MIN_LAMPORTS'ın (varsayılan 0.01 SOL) altına inerse /relay 503 döner.
 """
 from __future__ import annotations
 
@@ -40,8 +42,32 @@ def program_id() -> str:
     return os.getenv("PROGRAM_ID", "")
 
 
-def _rate_limit(client: str) -> None:
+async def _shared_hit(client: str) -> int | None:
+    """Upstash REST üzerinden dakikalık sayaç. Yapılandırılmamışsa ya da erişilemezse None (bellek içi sayaca düşülür)."""
+    url, token = os.getenv("UPSTASH_REDIS_REST_URL"), os.getenv("UPSTASH_REDIS_REST_TOKEN")
+    if not url or not token:
+        return None
+    key = f"notary:relay:{client}:{int(time.time() // 60)}"
+    try:
+        async with httpx.AsyncClient(timeout=3) as http:
+            resp = await http.post(
+                f"{url.rstrip('/')}/pipeline",
+                headers={"Authorization": f"Bearer {token}"},
+                json=[["INCR", key], ["EXPIRE", key, 90]],
+            )
+        return int(resp.json()[0]["result"])
+    except Exception as exc:  # sayaç servisi çökerse relay'i kapatma, bellek içine düş
+        logger.warning("shared rate limit unavailable: %s", exc)
+        return None
+
+
+async def _rate_limit(client: str) -> None:
     limit = int(os.getenv("RELAY_RATE_LIMIT", "10"))
+    shared = await _shared_hit(client)
+    if shared is not None:
+        if shared > limit:
+            raise HTTPException(status_code=429, detail="Too many relay requests; try again in a minute.")
+        return
     now = time.time()
     q = _hits[client]
     while q and now - q[0] > 60:
@@ -99,13 +125,29 @@ def _validate(tx: Transaction, relayer: Pubkey, prog: Pubkey) -> Pubkey:
     return proof
 
 
-@router.get("/info", summary="Relayer adresi ve program")
+def min_lamports() -> int:
+    return int(os.getenv("RELAY_MIN_LAMPORTS", "10000000"))
+
+
+async def _balance(pubkey: Pubkey) -> int | None:
+    try:
+        return (await _rpc("getBalance", [str(pubkey), {"commitment": "confirmed"}]))["value"]
+    except Exception:
+        return None
+
+
+@router.get("/info", summary="Relayer adresi, program ve bakiye durumu")
 async def relay_info() -> dict:
+    relayer = get_or_create_keypair().pubkey()
+    balance = await _balance(relayer)
+    low = balance is not None and balance < min_lamports()
     return {
-        "enabled": bool(program_id()),
+        "enabled": bool(program_id()) and not low,
         "program_id": program_id() or None,
-        "relayer_pubkey": str(get_or_create_keypair().pubkey()),
+        "relayer_pubkey": str(relayer),
         "cluster": CLUSTER,
+        "balance_lamports": balance,
+        "low_balance": low,
     }
 
 
@@ -113,7 +155,7 @@ async def relay_info() -> dict:
 async def relay(req: RelayRequest, request: Request) -> RelayResponse:
     if not program_id():
         raise HTTPException(503, "Relay disabled: PROGRAM_ID is not configured.")
-    _rate_limit(request.client.host if request.client else "unknown")
+    await _rate_limit(request.client.host if request.client else "unknown")
 
     try:
         tx = Transaction.from_bytes(base64.b64decode(req.tx_base64, validate=True))
@@ -121,6 +163,10 @@ async def relay(req: RelayRequest, request: Request) -> RelayResponse:
         raise HTTPException(400, "tx_base64 is not a valid serialized transaction.") from None
 
     relayer_kp = get_or_create_keypair()
+    balance = await _balance(relayer_kp.pubkey())
+    if balance is not None and balance < min_lamports():
+        logger.error("relayer balance low: %s lamports", balance)
+        raise HTTPException(503, "Relayer is out of funds; try again later.")
     proof_pda = _validate(tx, relayer_kp.pubkey(), Pubkey.from_string(program_id()))
 
     tx.partial_sign([relayer_kp], tx.message.recent_blockhash)
