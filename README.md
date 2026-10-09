@@ -1,3 +1,5 @@
+<p align="center"><img src="frontend/public/logo.png" alt="Notary logo" width="120" /></p>
+
 # Notary
 
 AI agent'ları ve insanlar için **doğrulanabilir belge kanıtı**. Her belgenin SHA-256 parmak izi, imzalayanın cüzdanıyla

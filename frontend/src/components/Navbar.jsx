@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { sha256Hex } from '../lib/chain';
 import { checkHealth } from '../api';
 import { API_URL } from '../lib/config';
 import { useNotary } from '../lib/notary';
-import Seal from './Seal';
 import Tabs from './Tabs';
 import WalletButton from './WalletButton';
 
@@ -17,10 +15,6 @@ const NAV = [
 export default function Navbar({ activeTab, setActiveTab }) {
   const { isDemo, cluster } = useNotary();
   const [relayerOnline, setRelayerOnline] = useState(false);
-  const [markHash, setMarkHash] = useState('');
-
-  // Logo da bir mühür: "notary" kelimesinin hash'inden çizilir
-  useEffect(() => { sha256Hex('notary').then(setMarkHash); }, []);
 
   // API opsiyoneldir (yalnızca relayer); doğrulama ona bağlı değildir.
   useEffect(() => {
@@ -38,7 +32,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
         <div className="flex items-center justify-between gap-4 h-16">
           <div className="flex items-center gap-8 min-w-0">
             <button type="button" onClick={() => setActiveTab('check')} className="flex items-center gap-2.5 shrink-0" aria-label="Notary, go to Check">
-              {markHash ? <Seal hash={markHash} state="neutral" size={30} label="" /> : <span className="w-[30px] h-[30px]" />}
+              <img src="/logo.png" width="36" height="36" alt="" className="shrink-0" />
               <span className="font-display text-xl font-bold tracking-tight text-ink">Notary</span>
             </button>
             <nav aria-label="Main" className="hidden md:block">

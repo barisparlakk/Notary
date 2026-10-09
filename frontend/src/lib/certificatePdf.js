@@ -2,6 +2,7 @@
 // çağrıldığında yüklenir (dinamik import), ana pakete girmez.
 import QRCode from 'qrcode';
 import { SEAL_INK, curvePoints, sealSpec, tickSegments } from './seal.js';
+import { LOGO_PNG_DATA_URL } from './logoData.js';
 
 export const LEGAL_NOTICE =
   'This certificate is a timestamped integrity proof anchored on the Solana blockchain. It shows that the listed wallet(s) '
@@ -68,9 +69,10 @@ export async function buildCertificatePdf(certificate) {
 
   const isAgreement = certificate.version === 'notary.agreement.v1';
   doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(17, 24, 39);
-  doc.text('Notary', left, y);
+  doc.addImage(LOGO_PNG_DATA_URL, 'PNG', left, y - 26, 34, 34);
+  doc.text('Notary', left + 44, y);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(100, 116, 139);
-  doc.text(isAgreement ? 'Agreement verification certificate' : 'Document verification certificate', left + 72, y);
+  doc.text(isAgreement ? 'Agreement verification certificate' : 'Document verification certificate', left + 44 + 72, y);
   const isDemo = certificate.cluster === 'demo';
   const sealState = isAgreement && !certificate.complete ? 'pending' : 'verified';
   drawSeal(doc, certificate.document_hash, left + width - 52, 78, 50, sealState, isDemo);
