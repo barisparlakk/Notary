@@ -105,5 +105,55 @@ if (RELAY_URL) {
   }
 }
 
+// 4) kimlik beyanı ve iptal (CONTRACT.md 4a): doğrudan ve (RELAY_URL varsa) kullanıcının SOL'ü olmadan
+{
+  const sg = (kp) => ({ publicKey: kp.publicKey, keypair: kp });
+  const [person, issuer, other] = [Keypair.generate(), Keypair.generate(), Keypair.generate()];
+  await Promise.all([fund(person), fund(issuer), fund(other)]);
+  const trust = { [issuer.publicKey.toBase58()]: { label: 'E2E Issuer' } };
+  const p = person.publicKey.toBase58();
+  const doc = await hashOf(`identity e2e ${Date.now()}`);
+  const rec = await rpc.notarize({ signer: sg(person), hashHex: doc });
+
+  check('identity starts as none', (await chain.resolveIdentity(rpc, p, trust)).level === 'none');
+  await rpc.attestIdentity({ signer: sg(person), subject: person.publicKey, label: 'Ahmet', evidence: 'self' });
+  check('self attestation is self_declared', (await chain.resolveIdentity(rpc, p, trust)).level === 'self_declared');
+  await rpc.attestIdentity({ signer: sg(issuer), subject: person.publicKey, label: 'Ahmet Yilmaz', evidence: 'kyc', expiresAt: Math.floor(Date.now() / 1000) + 3600 });
+  const id = await chain.resolveIdentity(rpc, p, trust);
+  check('issuer attestation is trusted', id.level === 'trusted' && id.label === 'Ahmet Yilmaz' && id.best.issuer_label === 'E2E Issuer');
+  check('unlisted issuer is unrecognized', (await chain.resolveIdentity(rpc, p, {})).level === 'unrecognized_issuer');
+  const v = await chain.verifyDocument(rpc, doc, { pda: rec.proof_pda, trust });
+  check('verify carries the signer identity', v.status === 'VERIFIED' && v.identity.level === 'trusted');
+
+  let badLabel = false;
+  try { await rpc.attestIdentity({ signer: sg(person), subject: person.publicKey, label: 'x'.repeat(33) }); } catch { badLabel = true; }
+  check('over-long label rejected', badLabel);
+  let thief = false;
+  try { await rpc.revokeProof({ signer: sg(other), proofPda: rec.proof_pda }); } catch { thief = true; }
+  check('only the signer can revoke a proof (rejected by program)', thief);
+
+  await rpc.revokeAttestation({ signer: sg(issuer), subject: person.publicKey });
+  check('revoked attestation falls back to self_declared', (await chain.resolveIdentity(rpc, p, trust)).level === 'self_declared');
+  await rpc.revokeProof({ signer: sg(person), proofPda: rec.proof_pda });
+  const rv = await chain.verifyDocument(rpc, doc, { pda: rec.proof_pda, trust });
+  check('revoked proof -> REVOKED', rv.status === 'REVOKED' && rv.revocation.signer === p);
+  check('changed file still INVALID after revoke', (await chain.verifyDocument(rpc, await hashOf('zzz'), { pda: rec.proof_pda })).status === 'INVALID');
+  let again = false;
+  try { await rpc.revokeProof({ signer: sg(person), proofPda: rec.proof_pda }); } catch { again = true; }
+  check('second revoke rejected', again);
+
+  if (RELAY_URL) {
+    const [a, b] = [Keypair.generate(), Keypair.generate()]; // SOL'ü yok
+    const rd = await hashOf(`identity relayed ${Date.now()}`);
+    await rpc.attestIdentity({ signer: sg(a), subject: a.publicKey, label: 'Relayed', evidence: 'x', relay: RELAY_URL });
+    const rr = await rpc.notarize({ signer: sg(a), hashHex: rd, relay: RELAY_URL });
+    await rpc.attestIdentity({ signer: sg(b), subject: a.publicKey, label: 'Relayed Person', evidence: 'y', relay: RELAY_URL });
+    await rpc.revokeProof({ signer: sg(a), proofPda: rr.proof_pda, relay: RELAY_URL });
+    await rpc.revokeAttestation({ signer: sg(b), subject: a.publicKey, relay: RELAY_URL });
+    check('relayed identity + revoke work (users have 0 SOL)', (await chain.verifyDocument(rpc, rd, { pda: rr.proof_pda })).status === 'REVOKED'
+      && (await conn.getBalance(a.publicKey)) === 0 && (await conn.getBalance(b.publicKey)) === 0);
+  }
+}
+
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nall checks passed');
 process.exit(failed ? 1 : 0);
