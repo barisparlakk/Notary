@@ -1,0 +1,831 @@
+{
+  "address": "7HCpWChK9pXXAsUzAvA8zq3pi6EwuaUJnkk8XqMn1swN",
+  "metadata": {
+    "name": "notary",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Notary: PDA tabanlı belge kanıtı (CONTRACT.md v2)"
+  },
+  "instructions": [
+    {
+      "name": "notarize",
+      "docs": [
+        "Belge hash'ini imzalayan adına kaydeder. Aynı (signer, hash) ikinci kez kaydedilemez:",
+        "`init` \"account already in use\" ile başarısız olur."
+      ],
+      "discriminator": [
+        233,
+        94,
+        53,
+        238,
+        66,
+        110,
+        74,
+        50
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "docs": [
+            "Belgeyi imzalayan (agent anahtarı ya da insan cüzdanı)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Kira ve ücreti ödeyen. `signer` ile aynı olabilir; farklıysa bir relayer'dır."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "proof",
+          "writable": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "document_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "receiver",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "parents",
+          "type": {
+            "vec": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_agreement",
+      "docs": [
+        "Birden fazla tarafın imzalaması gereken sözleşme. Oluşturan taraf `signers` içinde olmalı ve oluştururken",
+        "otomatik imzalamış sayılır; diğerleri `co_sign` ile imzalar. Seeds: [\"agreement\", creator, document_hash]."
+      ],
+      "discriminator": [
+        220,
+        156,
+        65,
+        172,
+        252,
+        68,
+        74,
+        233
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Kira ve ücreti ödeyen; `creator` ile aynı olabilir (relayer olabilir)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "agreement",
+          "writable": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "document_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "signers",
+          "type": {
+            "vec": "pubkey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "co_sign",
+      "docs": [
+        "Sözleşmedeki bir tarafın imzası. İmza, işlemin kendi imzasıdır; zaman zincirin saatidir."
+      ],
+      "discriminator": [
+        185,
+        226,
+        12,
+        133,
+        56,
+        68,
+        32,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "agreement",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "attest_identity",
+      "docs": [
+        "Bir yayıncının (issuer) bir cüzdan için kimlik beyanı. `issuer == subject` ise kişinin kendi beyanıdır (kayıt);",
+        "aksi halde üçüncü taraf onayıdır. Hangi yayıncılara güvenileceği istemcinin güven listesinde (docs/trusted_issuers.json) durur.",
+        "Aynı (issuer, subject) için son beyan geçerlidir: yenileme bu talimatın tekrar çağrılmasıdır.",
+        "`claim_hash`: zincir dışı kanıtın (kimlik kontrolü kaydı, sözleşme vb.) SHA-256'sı. Kişisel veri zincire yazılmaz.",
+        "`expires_at`: 0 = süresiz, aksi halde unix saniyesi (şimdiden ileri olmalı)."
+      ],
+      "discriminator": [
+        168,
+        23,
+        67,
+        128,
+        209,
+        218,
+        88,
+        86
+      ],
+      "accounts": [
+        {
+          "name": "issuer",
+          "docs": [
+            "Beyanı veren (kişinin kendisi ya da bir yayıncı)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Kira ve ücreti ödeyen; `issuer` ile aynı olabilir (relayer olabilir)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "attestation",
+          "writable": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "subject",
+          "type": "pubkey"
+        },
+        {
+          "name": "label",
+          "type": "string"
+        },
+        {
+          "name": "claim_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "expires_at",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "revoke_attestation",
+      "docs": [
+        "Yayıncı kendi beyanını geri çeker. Zaman zincirin saatidir; geri alma yok (yenilemek için `attest_identity`)."
+      ],
+      "discriminator": [
+        12,
+        156,
+        103,
+        161,
+        194,
+        246,
+        211,
+        179
+      ],
+      "accounts": [
+        {
+          "name": "issuer",
+          "signer": true
+        },
+        {
+          "name": "attestation",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "revoke_proof",
+      "docs": [
+        "İmzalayan kendi kaydını geçersiz kılar. `Proof` hesabı değişmez (zincirde kalır); yanına bir `Revocation` PDA'sı",
+        "açılır ve doğrulayıcılar durumu REVOKED gösterir. Yalnızca kaydı oluşturan imzalayan yapabilir."
+      ],
+      "discriminator": [
+        59,
+        117,
+        210,
+        117,
+        75,
+        24,
+        100,
+        117
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "docs": [
+            "Kaydı oluşturan imzalayan."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Kira ve ücreti ödeyen; `signer` ile aynı olabilir (relayer olabilir)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "proof"
+        },
+        {
+          "name": "revocation",
+          "writable": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Agreement",
+      "discriminator": [
+        83,
+        212,
+        5,
+        110,
+        225,
+        249,
+        197,
+        84
+      ]
+    },
+    {
+      "name": "Attestation",
+      "discriminator": [
+        152,
+        125,
+        183,
+        86,
+        36,
+        146,
+        121,
+        73
+      ]
+    },
+    {
+      "name": "Proof",
+      "discriminator": [
+        163,
+        35,
+        13,
+        71,
+        15,
+        128,
+        63,
+        82
+      ]
+    },
+    {
+      "name": "Revocation",
+      "discriminator": [
+        128,
+        117,
+        129,
+        229,
+        11,
+        159,
+        79,
+        234
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "Agreement",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "document_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "signers",
+            "docs": [
+              "Sözleşmeyi imzalaması gereken taraflar (2..=MAX_PARTIES)"
+            ],
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "signed_at",
+            "docs": [
+              "`signers` ile aynı sırada; 0 = henüz imzalamadı, aksi halde zincir saati"
+            ],
+            "type": {
+              "vec": "i64"
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Attestation",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "subject",
+            "type": "pubkey"
+          },
+          {
+            "name": "label",
+            "type": "string"
+          },
+          {
+            "name": "claim_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "docs": [
+              "0 = süresiz"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "revoked_at",
+            "docs": [
+              "0 = geçerli"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Proof",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "document_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "receiver",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "parents",
+            "type": {
+              "vec": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Revocation",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "proof",
+            "type": "pubkey"
+          },
+          {
+            "name": "signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "revoked_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AgreementCreated",
+      "type": {
+        "fields": [
+          {
+            "name": "agreement",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "document_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "parties",
+            "type": "u8"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "AgreementSigned",
+      "type": {
+        "fields": [
+          {
+            "name": "agreement",
+            "type": "pubkey"
+          },
+          {
+            "name": "signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "remaining",
+            "type": "u8"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "AttestationRevoked",
+      "type": {
+        "fields": [
+          {
+            "name": "attestation",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "subject",
+            "type": "pubkey"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "IdentityAttested",
+      "type": {
+        "fields": [
+          {
+            "name": "attestation",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "subject",
+            "type": "pubkey"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "Notarized",
+      "type": {
+        "fields": [
+          {
+            "name": "proof",
+            "type": "pubkey"
+          },
+          {
+            "name": "signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "document_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "receiver",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "ProofRevoked",
+      "type": {
+        "fields": [
+          {
+            "name": "proof",
+            "type": "pubkey"
+          },
+          {
+            "name": "signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "revoked_at",
+            "type": "i64"
+          }
+        ],
+        "kind": "struct"
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "TooManyParents",
+      "msg": "En fazla 4 üst belge verilebilir"
+    },
+    {
+      "code": 6001,
+      "name": "DuplicateParent",
+      "msg": "Üst belge hash'leri tekrar edemez"
+    },
+    {
+      "code": 6002,
+      "name": "BadPartyCount",
+      "msg": "Sözleşme en az 2, en fazla 4 taraf içermeli"
+    },
+    {
+      "code": 6003,
+      "name": "DuplicateSigner",
+      "msg": "Taraflar tekrar edemez"
+    },
+    {
+      "code": 6004,
+      "name": "CreatorNotParty",
+      "msg": "Sözleşmeyi oluşturan taraflar arasında olmalı"
+    },
+    {
+      "code": 6005,
+      "name": "NotAParty",
+      "msg": "Bu hesap sözleşmenin tarafı değil"
+    },
+    {
+      "code": 6006,
+      "name": "AlreadySigned",
+      "msg": "Bu taraf zaten imzaladı"
+    },
+    {
+      "code": 6007,
+      "name": "BadLabel",
+      "msg": "Etiket 1 ile 32 bayt arasında olmalı"
+    },
+    {
+      "code": 6008,
+      "name": "BadExpiry",
+      "msg": "Bitiş zamanı 0 (süresiz) ya da gelecekte olmalı"
+    },
+    {
+      "code": 6009,
+      "name": "AlreadyRevoked",
+      "msg": "Beyan zaten geri çekilmiş"
+    },
+    {
+      "code": 6010,
+      "name": "NotTheIssuer",
+      "msg": "Yalnızca beyanı veren yayıncı geri çekebilir"
+    },
+    {
+      "code": 6011,
+      "name": "NotTheSigner",
+      "msg": "Yalnızca kaydı oluşturan imzalayan iptal edebilir"
+    }
+  ],
+  "events": [
+    {
+      "name": "AgreementCreated",
+      "discriminator": [
+        131,
+        148,
+        204,
+        18,
+        83,
+        92,
+        57,
+        18
+      ]
+    },
+    {
+      "name": "AgreementSigned",
+      "discriminator": [
+        39,
+        40,
+        241,
+        112,
+        64,
+        221,
+        219,
+        203
+      ]
+    },
+    {
+      "name": "AttestationRevoked",
+      "discriminator": [
+        47,
+        106,
+        65,
+        238,
+        200,
+        127,
+        163,
+        50
+      ]
+    },
+    {
+      "name": "IdentityAttested",
+      "discriminator": [
+        65,
+        58,
+        211,
+        239,
+        192,
+        165,
+        10,
+        27
+      ]
+    },
+    {
+      "name": "Notarized",
+      "discriminator": [
+        55,
+        122,
+        120,
+        143,
+        123,
+        142,
+        157,
+        112
+      ]
+    },
+    {
+      "name": "ProofRevoked",
+      "discriminator": [
+        180,
+        50,
+        127,
+        28,
+        218,
+        29,
+        35,
+        42
+      ]
+    }
+  ]
+}

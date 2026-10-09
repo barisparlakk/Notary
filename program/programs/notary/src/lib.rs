@@ -7,6 +7,7 @@ declare_id!("7HCpWChK9pXXAsUzAvA8zq3pi6EwuaUJnkk8XqMn1swN");
 
 pub const MAX_PARENTS: usize = 4;
 pub const MAX_PARTIES: usize = 4;
+pub const MAX_LABEL: usize = 32;
 
 #[program]
 pub mod notary {
@@ -112,6 +113,77 @@ pub mod notary {
         });
         Ok(())
     }
+
+    /// Bir yayıncının (issuer) bir cüzdan için kimlik beyanı. `issuer == subject` ise kişinin kendi beyanıdır (kayıt);
+    /// aksi halde üçüncü taraf onayıdır. Hangi yayıncılara güvenileceği istemcinin güven listesinde (docs/trusted_issuers.json) durur.
+    /// Aynı (issuer, subject) için son beyan geçerlidir: yenileme bu talimatın tekrar çağrılmasıdır.
+    /// `claim_hash`: zincir dışı kanıtın (kimlik kontrolü kaydı, sözleşme vb.) SHA-256'sı. Kişisel veri zincire yazılmaz.
+    /// `expires_at`: 0 = süresiz, aksi halde unix saniyesi (şimdiden ileri olmalı).
+    pub fn attest_identity(
+        ctx: Context<AttestIdentity>,
+        subject: Pubkey,
+        label: String,
+        claim_hash: [u8; 32],
+        expires_at: i64,
+    ) -> Result<()> {
+        require!(
+            !label.is_empty() && label.len() <= MAX_LABEL,
+            NotaryError::BadLabel
+        );
+        let now = Clock::get()?.unix_timestamp;
+        require!(expires_at == 0 || expires_at > now, NotaryError::BadExpiry);
+
+        let a = &mut ctx.accounts.attestation;
+        a.version = 1;
+        a.issuer = ctx.accounts.issuer.key();
+        a.subject = subject;
+        a.label = label;
+        a.claim_hash = claim_hash;
+        a.created_at = now;
+        a.expires_at = expires_at;
+        a.revoked_at = 0;
+        a.bump = ctx.bumps.attestation;
+
+        emit!(IdentityAttested {
+            attestation: a.key(),
+            issuer: a.issuer,
+            subject,
+            expires_at,
+        });
+        Ok(())
+    }
+
+    /// Yayıncı kendi beyanını geri çeker. Zaman zincirin saatidir; geri alma yok (yenilemek için `attest_identity`).
+    pub fn revoke_attestation(ctx: Context<RevokeAttestation>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let a = &mut ctx.accounts.attestation;
+        require!(a.revoked_at == 0, NotaryError::AlreadyRevoked);
+        a.revoked_at = now;
+        emit!(AttestationRevoked {
+            attestation: a.key(),
+            issuer: a.issuer,
+            subject: a.subject,
+        });
+        Ok(())
+    }
+
+    /// İmzalayan kendi kaydını geçersiz kılar. `Proof` hesabı değişmez (zincirde kalır); yanına bir `Revocation` PDA'sı
+    /// açılır ve doğrulayıcılar durumu REVOKED gösterir. Yalnızca kaydı oluşturan imzalayan yapabilir.
+    pub fn revoke_proof(ctx: Context<RevokeProof>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let r = &mut ctx.accounts.revocation;
+        r.version = 1;
+        r.proof = ctx.accounts.proof.key();
+        r.signer = ctx.accounts.signer.key();
+        r.revoked_at = now;
+        r.bump = ctx.bumps.revocation;
+        emit!(ProofRevoked {
+            proof: r.proof,
+            signer: r.signer,
+            revoked_at: now,
+        });
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -167,6 +239,103 @@ pub struct CoSign<'info> {
         bump = agreement.bump
     )]
     pub agreement: Account<'info, Agreement>,
+}
+
+#[derive(Accounts)]
+#[instruction(subject: Pubkey)]
+pub struct AttestIdentity<'info> {
+    /// Beyanı veren (kişinin kendisi ya da bir yayıncı).
+    pub issuer: Signer<'info>,
+
+    /// Kira ve ücreti ödeyen; `issuer` ile aynı olabilir (relayer olabilir).
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    #[account(
+        init_if_needed,
+        payer = payer,
+        space = Attestation::SPACE,
+        seeds = [b"attest", issuer.key().as_ref(), subject.as_ref()],
+        bump
+    )]
+    pub attestation: Account<'info, Attestation>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RevokeAttestation<'info> {
+    pub issuer: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"attest", attestation.issuer.as_ref(), attestation.subject.as_ref()],
+        bump = attestation.bump,
+        has_one = issuer @ NotaryError::NotTheIssuer
+    )]
+    pub attestation: Account<'info, Attestation>,
+}
+
+#[derive(Accounts)]
+pub struct RevokeProof<'info> {
+    /// Kaydı oluşturan imzalayan.
+    pub signer: Signer<'info>,
+
+    /// Kira ve ücreti ödeyen; `signer` ile aynı olabilir (relayer olabilir).
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    #[account(
+        seeds = [b"proof", proof.signer.as_ref(), proof.document_hash.as_ref()],
+        bump = proof.bump,
+        has_one = signer @ NotaryError::NotTheSigner
+    )]
+    pub proof: Account<'info, Proof>,
+
+    #[account(
+        init,
+        payer = payer,
+        space = Revocation::SPACE,
+        seeds = [b"revoke", proof.key().as_ref()],
+        bump
+    )]
+    pub revocation: Account<'info, Revocation>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[account]
+pub struct Attestation {
+    pub version: u8,
+    pub issuer: Pubkey,
+    pub subject: Pubkey,
+    pub label: String,
+    pub claim_hash: [u8; 32],
+    pub created_at: i64,
+    /// 0 = süresiz
+    pub expires_at: i64,
+    /// 0 = geçerli
+    pub revoked_at: i64,
+    pub bump: u8,
+}
+
+impl Attestation {
+    /// 8 + 1 + 32 + 32 + (4 + 32) + 32 + 8 + 8 + 8 + 1 = 166
+    pub const SPACE: usize = 8 + 1 + 32 + 32 + (4 + MAX_LABEL) + 32 + 8 + 8 + 8 + 1;
+}
+
+#[account]
+pub struct Revocation {
+    pub version: u8,
+    pub proof: Pubkey,
+    pub signer: Pubkey,
+    pub revoked_at: i64,
+    pub bump: u8,
+}
+
+impl Revocation {
+    /// 8 + 1 + 32 + 32 + 8 + 1 = 82
+    pub const SPACE: usize = 8 + 1 + 32 + 32 + 8 + 1;
 }
 
 #[account]
@@ -228,6 +397,28 @@ pub struct AgreementSigned {
     pub remaining: u8,
 }
 
+#[event]
+pub struct IdentityAttested {
+    pub attestation: Pubkey,
+    pub issuer: Pubkey,
+    pub subject: Pubkey,
+    pub expires_at: i64,
+}
+
+#[event]
+pub struct AttestationRevoked {
+    pub attestation: Pubkey,
+    pub issuer: Pubkey,
+    pub subject: Pubkey,
+}
+
+#[event]
+pub struct ProofRevoked {
+    pub proof: Pubkey,
+    pub signer: Pubkey,
+    pub revoked_at: i64,
+}
+
 #[error_code]
 pub enum NotaryError {
     #[msg("En fazla 4 üst belge verilebilir")]
@@ -244,4 +435,14 @@ pub enum NotaryError {
     NotAParty,
     #[msg("Bu taraf zaten imzaladı")]
     AlreadySigned,
+    #[msg("Etiket 1 ile 32 bayt arasında olmalı")]
+    BadLabel,
+    #[msg("Bitiş zamanı 0 (süresiz) ya da gelecekte olmalı")]
+    BadExpiry,
+    #[msg("Beyan zaten geri çekilmiş")]
+    AlreadyRevoked,
+    #[msg("Yalnızca beyanı veren yayıncı geri çekebilir")]
+    NotTheIssuer,
+    #[msg("Yalnızca kaydı oluşturan imzalayan iptal edebilir")]
+    NotTheSigner,
 }

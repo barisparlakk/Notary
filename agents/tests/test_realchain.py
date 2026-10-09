@@ -1,6 +1,7 @@
 # Gerçek bir Solana doğrulayıcısına (solana-test-validator ya da devnet) karşı sınama. Yalnızca env verilirse çalışır:
 #   NOTARY_TEST_RPC=http://127.0.0.1:8899 NOTARY_TEST_PROGRAM=<id> NOTARY_TEST_FUNDER=<fonlu.json> pytest tests/test_realchain.py
 import os
+import time
 
 import pytest
 
@@ -67,3 +68,100 @@ def test_real_relayer_pays_agreement_fees(rpc):
     out = onchain.create_agreement(rpc, broke_a, h, [broke_a.pubkey(), broke_b.pubkey()], program_id=PROGRAM, payer=relayer)
     onchain.co_sign(rpc, broke_b, out["agreement_pda"], program_id=PROGRAM, payer=relayer)
     assert onchain.get_agreement(rpc, out["agreement_pda"])["complete"]
+
+
+# ---------------------------------------------------------------- iptal ve kimlik (CONTRACT.md 4a)
+def test_real_revoke_proof(rpc):
+    owner, other = fresh(rpc, 2)
+    data = f"revoke me {os.urandom(4).hex()}".encode()
+    out = onchain.notarize(rpc, owner, onchain.sha256_bytes(data), program_id=PROGRAM)
+    assert onchain.verify(rpc, data, pda=out["proof_pda"], program_id=PROGRAM)["status"] == "VERIFIED"
+
+    with pytest.raises(onchain.ChainError):  # başkası iptal edemez
+        onchain.revoke_proof(rpc, other, out["proof_pda"], program_id=PROGRAM)
+    assert onchain.verify(rpc, data, pda=out["proof_pda"], program_id=PROGRAM)["status"] == "VERIFIED"
+
+    rev = onchain.revoke_proof(rpc, owner, out["proof_pda"], program_id=PROGRAM)
+    raw = rpc.get_account(rev["revocation_pda"])["data"]
+    assert len(raw) == onchain.REVOCATION_SIZE and raw[:8] == onchain.REVOCATION_DISC
+    res = onchain.verify(rpc, data, pda=out["proof_pda"], program_id=PROGRAM)
+    assert res["status"] == "REVOKED" and res["revocation"]["signer"] == str(owner.pubkey())
+    assert onchain.verify(rpc, data + b"x", pda=out["proof_pda"], program_id=PROGRAM)["status"] == "INVALID"  # değişmiş dosya yine INVALID
+    assert onchain.get_proof(rpc, out["proof_pda"])["document_hash"] == onchain.sha256_bytes(data).hex()  # kayıt zincirde kalır
+    with pytest.raises(onchain.ChainError):  # ikinci iptal açılamaz
+        onchain.revoke_proof(rpc, owner, out["proof_pda"], program_id=PROGRAM)
+
+
+def test_real_identity_levels_expiry_and_revocation(rpc):
+    person, issuer = fresh(rpc, 2)
+    p = str(person.pubkey())
+    trust = {str(issuer.pubkey()): {"pubkey": str(issuer.pubkey()), "label": "Test Issuer"}}
+    assert onchain.resolve_identity(rpc, p, PROGRAM, trust)["level"] == "none"
+
+    onchain.attest_identity(rpc, person, person.pubkey(), "Ahmet (self)", b"i am ahmet", program_id=PROGRAM)  # kayıt: kendi beyanı
+    ident = onchain.resolve_identity(rpc, p, PROGRAM, trust)
+    assert (ident["level"], ident["label"]) == ("self_declared", "Ahmet (self)")
+
+    att = onchain.attest_identity(rpc, issuer, person.pubkey(), "Ahmet Yilmaz", b"id-check-2026-10", program_id=PROGRAM)
+    raw = rpc.get_account(att["attestation_pda"])["data"]
+    assert len(raw) == onchain.ATTESTATION_SIZE and raw[:8] == onchain.ATTESTATION_DISC
+    ident = onchain.resolve_identity(rpc, p, PROGRAM, trust)
+    assert (ident["level"], ident["label"], ident["best"]["issuer_label"]) == ("trusted", "Ahmet Yilmaz", "Test Issuer")
+    assert ident["best"]["claim_hash"] == onchain.claim_hash(b"id-check-2026-10").hex()
+    assert onchain.resolve_identity(rpc, p, PROGRAM, {})["level"] == "unrecognized_issuer"  # yayıncıya güvenmeyen
+
+    # kişi, yayıncının beyanını geri çekmeye çalışır: program reddetmeli (istemci fonksiyonu PDA'yı imzalayandan türettiği için ham talimat)
+    att_pda = onchain.Pubkey.from_string(att["attestation_pda"])
+    steal = onchain.Instruction(
+        onchain.Pubkey.from_string(PROGRAM), onchain.REVOKE_ATTESTATION_DISC,
+        [onchain.AccountMeta(person.pubkey(), True, False), onchain.AccountMeta(att_pda, False, True)])
+    with pytest.raises(onchain.ChainError):
+        onchain._send_ix(rpc, steal, [person], person)
+    assert onchain.resolve_identity(rpc, p, PROGRAM, trust)["level"] == "trusted"  # beyan yerinde
+    onchain.revoke_attestation(rpc, issuer, person.pubkey(), program_id=PROGRAM)
+    assert onchain.resolve_identity(rpc, p, PROGRAM, trust)["level"] == "self_declared"  # onay düştü, kendi beyanı kaldı
+    with pytest.raises(onchain.ChainError):  # ikinci geri çekme
+        onchain.revoke_attestation(rpc, issuer, person.pubkey(), program_id=PROGRAM)
+
+    onchain.attest_identity(rpc, issuer, person.pubkey(), "Ahmet Yilmaz", b"renewed", program_id=PROGRAM)  # yenileme
+    assert onchain.resolve_identity(rpc, p, PROGRAM, trust)["level"] == "trusted"
+
+    soon = int(time.time()) + 4
+    onchain.attest_identity(rpc, issuer, person.pubkey(), "Ahmet Yilmaz", b"short", expires_at=soon, program_id=PROGRAM)
+    assert onchain.resolve_identity(rpc, p, PROGRAM, trust)["level"] == "trusted"
+    time.sleep(6)
+    assert onchain.resolve_identity(rpc, p, PROGRAM, trust)["level"] == "self_declared"  # süre doldu
+
+
+def test_real_identity_rules_rejected_by_program(rpc):
+    person, = fresh(rpc, 1)
+    pid = onchain.Pubkey.from_string(PROGRAM)
+    pda, _ = onchain.derive_attestation_pda(PROGRAM, person.pubkey(), person.pubkey())
+
+    def raw_attest(label_bytes, expires_at):
+        data = (onchain.ATTEST_IDENTITY_DISC + bytes(person.pubkey()) + len(label_bytes).to_bytes(4, "little") + label_bytes
+                + b"\x00" * 32 + expires_at.to_bytes(8, "little", signed=True))
+        ix = onchain.Instruction(pid, data, [
+            onchain.AccountMeta(person.pubkey(), True, False), onchain.AccountMeta(person.pubkey(), True, True),
+            onchain.AccountMeta(pda, False, True), onchain.AccountMeta(onchain.SYSTEM_PROGRAM_ID, False, False)])
+        return onchain._send_ix(rpc, ix, [person], person)
+
+    with pytest.raises(onchain.ChainError):  # boş etiket
+        raw_attest(b"", 0)
+    with pytest.raises(onchain.ChainError):  # 33 bayt etiket
+        raw_attest(b"x" * 33, 0)
+    with pytest.raises(onchain.ChainError):  # geçmişte bitiş
+        raw_attest(b"ok", 1)
+    raw_attest(b"x" * 32, 0)  # 32 bayt sınırda geçerli
+    assert onchain.resolve_identity(rpc, str(person.pubkey()), PROGRAM, {})["label"] == "x" * 32
+
+
+def test_real_verify_reports_identity_and_revocation_together(rpc):
+    person, issuer = fresh(rpc, 2)
+    trust = {str(issuer.pubkey()): {"pubkey": str(issuer.pubkey()), "label": "Test Issuer"}}
+    onchain.attest_identity(rpc, issuer, person.pubkey(), "Mehmet", b"kyc", program_id=PROGRAM)
+    data = f"identity doc {os.urandom(4).hex()}".encode()
+    out = onchain.notarize(rpc, person, onchain.sha256_bytes(data), program_id=PROGRAM)
+    res = onchain.verify(rpc, data, pda=out["proof_pda"], program_id=PROGRAM, trust=trust)
+    assert res["status"] == "VERIFIED" and res["identity"]["level"] == "trusted" and res["identity"]["label"] == "Mehmet"
+    assert "identity" not in onchain.verify(rpc, data, pda=out["proof_pda"], program_id=PROGRAM, identity=False)

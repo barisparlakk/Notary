@@ -26,7 +26,7 @@ KEYS_DIR = Path(__file__).parent / "keys"
 # Yeni işlem "confirmed" olur olmaz okunabilmeli; Solana'nın varsayılanı "finalized" (~13 sn gecikme).
 COMMITMENT = "confirmed"
 
-CERT_NOTICE = "Timestamped integrity proof recorded on Solana. Not a qualified electronic signature (eIDAS); does not by itself prove the identity of a signer."
+CERT_NOTICE = "Timestamped integrity proof recorded on Solana. Not a qualified electronic signature (eIDAS); does not by itself prove the identity of a signer. Identity, when shown, comes from attestations by issuers you choose to trust."
 
 MAX_PARENTS = 4
 MAX_PARTIES = 4
@@ -35,6 +35,15 @@ PROOF_DISC = hashlib.sha256(b"account:Proof").digest()[:8]
 CREATE_AGREEMENT_DISC = hashlib.sha256(b"global:create_agreement").digest()[:8]
 CO_SIGN_DISC = hashlib.sha256(b"global:co_sign").digest()[:8]
 AGREEMENT_DISC = hashlib.sha256(b"account:Agreement").digest()[:8]
+ATTEST_IDENTITY_DISC = hashlib.sha256(b"global:attest_identity").digest()[:8]
+REVOKE_ATTESTATION_DISC = hashlib.sha256(b"global:revoke_attestation").digest()[:8]
+REVOKE_PROOF_DISC = hashlib.sha256(b"global:revoke_proof").digest()[:8]
+ATTESTATION_DISC = hashlib.sha256(b"account:Attestation").digest()[:8]
+REVOCATION_DISC = hashlib.sha256(b"account:Revocation").digest()[:8]
+MAX_LABEL = 32
+ATTESTATION_SIZE, REVOCATION_SIZE = 166, 82
+ATTEST_ISSUER_OFFSET, ATTEST_SUBJECT_OFFSET = 9, 41  # Attestation: disc 8 + version 1 -> issuer; + 32 -> subject
+TRUST_LIST_PATH = Path(os.environ.get("NOTARY_TRUST_LIST") or Path(__file__).resolve().parent.parent / "docs" / "trusted_issuers.json")
 PROOF_SIZE, AGREEMENT_SIZE = 247, 250  # getProgramAccounts dataSize süzgeci: iki hesap türü hash ofsetini paylaşır
 AGREEMENT_PARTY_OFFSET = 85  # signers vektörünün ilk eleman ofseti; i. taraf = 85 + 32 * i
 SIGNER_OFFSET, HASH_OFFSET = 9, 41  # memcmp ofsetleri (CONTRACT.md v2, Bölüm 3)
@@ -179,6 +188,95 @@ def derive_agreement_pda(program_id, creator, document_hash: bytes):
     return Pubkey.find_program_address(
         [b"agreement", bytes(Pubkey.from_string(str(creator))), document_hash], Pubkey.from_string(str(program_id))
     )
+
+
+def _iso(ts: int):
+    return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if ts else None
+
+
+def derive_attestation_pda(program_id, issuer, subject):
+    """seeds = [b"attest", issuer, subject] -> (Pubkey, bump)"""
+    return Pubkey.find_program_address(
+        [b"attest", bytes(Pubkey.from_string(str(issuer))), bytes(Pubkey.from_string(str(subject)))],
+        Pubkey.from_string(str(program_id)),
+    )
+
+
+def derive_revocation_pda(program_id, proof_pda):
+    """seeds = [b"revoke", proof_pda] -> (Pubkey, bump)"""
+    return Pubkey.find_program_address([b"revoke", bytes(Pubkey.from_string(str(proof_pda)))], Pubkey.from_string(str(program_id)))
+
+
+def claim_hash(evidence) -> bytes:
+    """Zincir dışı kimlik kanıtının (metin ya da dosya baytları) SHA-256'sı. Kişisel veri zincire yazılmaz; yalnızca bu hash."""
+    return sha256_bytes(evidence.encode("utf-8") if isinstance(evidence, str) else bytes(evidence))
+
+
+def encode_attest_identity_data(subject, label: str, claim: bytes, expires_at: int = 0):
+    raw = label.encode("utf-8")
+    if not 1 <= len(raw) <= MAX_LABEL:
+        raise ChainError(f"etiket 1 ile {MAX_LABEL} bayt arasında olmalı")
+    if len(claim) != 32:
+        raise ChainError("claim_hash 32 bayt olmalı")
+    return (ATTEST_IDENTITY_DISC + bytes(Pubkey.from_string(str(subject))) + struct.pack("<I", len(raw)) + raw
+            + claim + struct.pack("<q", expires_at))
+
+
+def decode_attestation(data: bytes) -> dict:
+    if data[:8] != ATTESTATION_DISC:
+        raise ChainError("Attestation discriminator uyuşmuyor")
+    o = 8
+    version = data[o]
+    o += 1
+    issuer = Pubkey.from_bytes(data[o:o + 32])
+    o += 32
+    subject = Pubkey.from_bytes(data[o:o + 32])
+    o += 32
+    (n,) = struct.unpack_from("<I", data, o)
+    o += 4
+    label = data[o:o + n].decode("utf-8")
+    o += n
+    claim = data[o:o + 32]
+    o += 32
+    created_at, expires_at, revoked_at = struct.unpack_from("<qqq", data, o)
+    o += 24
+    return {
+        "version": version, "issuer": str(issuer), "subject": str(subject), "label": label, "claim_hash": claim.hex(),
+        "created_at": created_at, "created_at_iso": _iso(created_at),
+        "expires_at": expires_at, "expires_at_iso": _iso(expires_at),
+        "revoked_at": revoked_at, "revoked_at_iso": _iso(revoked_at),
+        "bump": data[o],
+    }
+
+
+def decode_revocation(data: bytes) -> dict:
+    if data[:8] != REVOCATION_DISC:
+        raise ChainError("Revocation discriminator uyuşmuyor")
+    (revoked_at,) = struct.unpack_from("<q", data, 8 + 1 + 32 + 32)
+    return {
+        "version": data[8], "proof": str(Pubkey.from_bytes(data[9:41])), "signer": str(Pubkey.from_bytes(data[41:73])),
+        "revoked_at": revoked_at, "revoked_at_iso": _iso(revoked_at), "bump": data[8 + 1 + 32 + 32 + 8],
+    }
+
+
+def attestation_state(att: dict, now: int = None) -> str:
+    """valid | expired | revoked (iptal, süre dolmasından önce gelir)."""
+    now = int(time.time()) if now is None else now
+    if att["revoked_at"]:
+        return "revoked"
+    if att["expires_at"] and att["expires_at"] <= now:
+        return "expired"
+    return "valid"
+
+
+def load_trust_list(path=None) -> dict:
+    """Güven listesi (eIDAS'taki Trusted List'in karşılığı): {issuer_pubkey: {label, ...}}. Dosya yoksa boş.
+    Biçim: {"issuers": [{"pubkey": "...", "label": "..."}]}. Listede olmayan yayıncının beyanı 'tanınmayan yayıncı' sayılır."""
+    path = Path(path) if path else TRUST_LIST_PATH
+    try:
+        return {i["pubkey"]: i for i in json.loads(path.read_text()).get("issuers", [])}
+    except (OSError, ValueError):
+        return {}
 
 
 # ------------------------------------------------------------------------- RPC
@@ -387,6 +485,104 @@ def get_agreement(rpc, pda):
     return decode_agreement(acc["data"]) if acc and acc["data"][:8] == AGREEMENT_DISC else None
 
 
+def list_attestations(rpc, subject, program_id=None):
+    """Bir cüzdan hakkındaki tüm kimlik beyanları (memcmp: subject ofseti 41, dataSize 166)."""
+    program_id = program_id or PROGRAM_ID
+    raw = bytes(Pubkey.from_string(str(subject)))
+    return [{**decode_attestation(d), "attestation_pda": pk}
+            for pk, d in rpc.get_program_accounts(program_id, ATTEST_SUBJECT_OFFSET, raw, ATTESTATION_SIZE)]
+
+
+def resolve_identity(rpc, subject, program_id=None, trusted=None, now=None) -> dict:
+    """Bir cüzdanın kimliği: beyanlar ve güven düzeyi.
+    level: trusted (güvenilen yayıncıdan geçerli beyan) | unrecognized_issuer (geçerli ama yayıncı listede yok) |
+           self_declared (yalnızca kişinin kendi beyanı) | none. Süresi dolmuş ya da iptal edilmiş beyanlar sayılmaz."""
+    trusted = load_trust_list() if trusted is None else trusted
+    subject = str(subject)
+    claims = []
+    for a in list_attestations(rpc, subject, program_id):
+        state = attestation_state(a, now)
+        issuer_entry = trusted.get(a["issuer"])
+        claims.append({**a, "state": state, "self": a["issuer"] == subject,
+                       "trusted": bool(issuer_entry) and a["issuer"] != subject,
+                       "issuer_label": issuer_entry.get("label") if issuer_entry else None})
+    live = [c for c in claims if c["state"] == "valid"]
+    best = next((c for c in live if c["trusted"]), None)
+    level = "trusted" if best else None
+    if not best:
+        best = next((c for c in live if not c["self"]), None)
+        level = "unrecognized_issuer" if best else None
+    if not best:
+        best = next((c for c in live if c["self"]), None)
+        level = "self_declared" if best else "none"
+    return {"subject": subject, "level": level, "label": best["label"] if best else None, "best": best, "claims": claims}
+
+
+def attest_identity(rpc, issuer: Keypair, subject, label, evidence=b"", expires_at=0, program_id=None, payer: Keypair = None):
+    """Kimlik beyanı. issuer == subject ise kişinin kendi kaydıdır; aksi halde bir yayıncının onayıdır.
+    `evidence`: zincir dışı kanıt (yalnızca SHA-256'sı yazılır). Aynı (issuer, subject) için tekrar çağrı yeniler.
+    -> {attestation_pda, tx_signature, issuer, subject}"""
+    program_id = program_id or PROGRAM_ID
+    if not program_id:
+        raise ChainError("PROGRAM_ID tanımlı değil")
+    payer = payer or issuer
+    pda, _ = derive_attestation_pda(program_id, issuer.pubkey(), subject)
+    ix = Instruction(
+        Pubkey.from_string(str(program_id)),
+        encode_attest_identity_data(subject, label, claim_hash(evidence), expires_at),
+        [
+            AccountMeta(issuer.pubkey(), True, False),
+            AccountMeta(payer.pubkey(), True, True),
+            AccountMeta(pda, False, True),
+            AccountMeta(SYSTEM_PROGRAM_ID, False, False),
+        ],
+    )
+    sig = _send_ix(rpc, ix, [issuer], payer)
+    return {"attestation_pda": str(pda), "tx_signature": sig, "issuer": str(issuer.pubkey()), "subject": str(subject)}
+
+
+def revoke_attestation(rpc, issuer: Keypair, subject, program_id=None, payer: Keypair = None):
+    """Yayıncı kendi beyanını geri çeker. -> {attestation_pda, tx_signature}"""
+    program_id = program_id or PROGRAM_ID
+    if not program_id:
+        raise ChainError("PROGRAM_ID tanımlı değil")
+    payer = payer or issuer
+    pda, _ = derive_attestation_pda(program_id, issuer.pubkey(), subject)
+    ix = Instruction(
+        Pubkey.from_string(str(program_id)), REVOKE_ATTESTATION_DISC,
+        [AccountMeta(issuer.pubkey(), True, False), AccountMeta(pda, False, True)],
+    )
+    sig = _send_ix(rpc, ix, [issuer], payer)
+    return {"attestation_pda": str(pda), "tx_signature": sig}
+
+
+def revoke_proof(rpc, signer: Keypair, proof_pda, program_id=None, payer: Keypair = None):
+    """İmzalayan kendi kaydını iptal eder (kayıt zincirde kalır, durum REVOKED olur). -> {revocation_pda, tx_signature}"""
+    program_id = program_id or PROGRAM_ID
+    if not program_id:
+        raise ChainError("PROGRAM_ID tanımlı değil")
+    payer = payer or signer
+    rev, _ = derive_revocation_pda(program_id, proof_pda)
+    ix = Instruction(
+        Pubkey.from_string(str(program_id)), REVOKE_PROOF_DISC,
+        [
+            AccountMeta(signer.pubkey(), True, False),
+            AccountMeta(payer.pubkey(), True, True),
+            AccountMeta(Pubkey.from_string(str(proof_pda)), False, False),
+            AccountMeta(rev, False, True),
+            AccountMeta(SYSTEM_PROGRAM_ID, False, False),
+        ],
+    )
+    sig = _send_ix(rpc, ix, [signer], payer)
+    return {"revocation_pda": str(rev), "tx_signature": sig, "proof_pda": str(proof_pda)}
+
+
+def get_revocation(rpc, proof_pda, program_id=None):
+    program_id = program_id or PROGRAM_ID
+    acc = rpc.get_account(derive_revocation_pda(program_id, proof_pda)[0])
+    return decode_revocation(acc["data"]) if acc and acc["data"][:8] == REVOCATION_DISC else None
+
+
 def _agreement_result(base, agreement, pda, received_hex):
     base.update(agreement=agreement, proof_pda=str(pda), original_hash=agreement["document_hash"])
     if agreement["document_hash"] != received_hex:
@@ -396,7 +592,7 @@ def _agreement_result(base, agreement, pda, received_hex):
     return base
 
 
-def verify(rpc, file_bytes: bytes, pda=None, signer=None, program_id=None):
+def _verify_core(rpc, file_bytes: bytes, pda=None, signer=None, program_id=None):
     """API'siz doğrulama (CONTRACT.md v2, Bölüm 4).
     -> {status: VERIFIED|PENDING|INVALID|NOT_FOUND, original_hash, received_hash, proof_pda, proof}
     PENDING: hash tutuyor ama çok imzalı sözleşmenin tüm tarafları henüz imzalamadı (yanıtta `agreement`)."""
@@ -432,6 +628,31 @@ def verify(rpc, file_bytes: bytes, pda=None, signer=None, program_id=None):
         best = (done or agreements)[0]
         _agreement_result(out, best, best["agreement_pda"], received.hex())
         out["matches"] = len(agreements)
+    return out
+
+
+def verify(rpc, file_bytes: bytes, pda=None, signer=None, program_id=None, trust=None, identity=True):
+    """API'siz doğrulama (CONTRACT.md v2, Bölüm 4 ve 4a).
+    -> {status: VERIFIED|PENDING|REVOKED|INVALID|NOT_FOUND, original_hash, received_hash, proof_pda, proof, identity}
+    REVOKED: hash tutuyor ama imzalayan kaydını iptal etmiş (yanıtta `revocation`).
+    identity: imzalayanın kimlik düzeyi (`resolve_identity`); `identity=False` ile ek sorgu yapılmaz.
+    `trust`: güvenilen yayıncılar sözlüğü (varsayılan: docs/trusted_issuers.json)."""
+    program_id = program_id or PROGRAM_ID
+    out = _verify_core(rpc, file_bytes, pda=pda, signer=signer, program_id=program_id)
+    proof = out.get("proof")
+    if proof and out["status"] == "VERIFIED":
+        rev = get_revocation(rpc, out["proof_pda"], program_id)
+        if rev:
+            out["status"], out["revocation"] = "REVOKED", rev
+    if identity:
+        try:
+            if proof:
+                out["identity"] = resolve_identity(rpc, proof["signer"], program_id, trust)
+            elif out.get("agreement"):
+                for party in out["agreement"]["parties"]:
+                    party["identity"] = resolve_identity(rpc, party["signer"], program_id, trust)
+        except (ChainError, OSError, ValueError) as exc:  # kimlik tamamlayıcıdır; doğrulamayı düşürmesin
+            out["identity_error"] = str(exc)
     return out
 
 
@@ -475,4 +696,15 @@ def build_certificate(proof_pda, proof, tx_signature, program_id=None, cluster="
         "tx_signature": tx_signature,
         "explorer_url": f"https://explorer.solana.com/address/{proof_pda}?cluster={cluster}",
         "verify_url": verify_url or f"?pda={proof_pda}",
+        # Sertifika tek başına bir şey kanıtlamaz; zincirdeki hesaba işaret eder. Herkes bu adımlarla bağımsız doğrulayabilir.
+        "how_to_verify": {
+            "spec": "CONTRACT.md section 4",
+            "steps": [
+                "hash = sha256(file)",
+                "account = getAccountInfo(proof_pda); owner must be program_id and discriminator must match Proof",
+                "status is VERIFIED if the recorded document_hash equals hash",
+                "check getAccountInfo(find_program_address([b\"revoke\", proof_pda])) is empty, otherwise the record is REVOKED",
+            ],
+            "cli": f"python agents/verify_standalone.py <file> --pda {proof_pda} --program {program_id} --rpc <rpc>",
+        },
     }
