@@ -41,6 +41,9 @@ MIN_ATTEST_DATA_LEN = 8 + 32 + 4 + 1 + 32 + 8  # discriminator + subject + etike
 MAX_ATTEST_DATA_LEN = 8 + 32 + 4 + 32 + 32 + 8  # etiket en çok 32 bayt
 MAX_DATA_LEN = 8 + 32 + 33 + 4 + 32 * 4  # discriminator + hash + Some(receiver) + vec len + 4 parent
 MAX_AGREEMENT_DATA_LEN = 8 + 32 + 4 + 32 * 4  # discriminator + hash + vec len + 4 taraf
+COMPUTE_BUDGET_PROGRAM = Pubkey.from_string("ComputeBudget111111111111111111111111111111")
+SET_COMPUTE_UNIT_LIMIT, SET_COMPUTE_UNIT_PRICE = 2, 3
+DEFAULT_CU_LIMIT = 200_000  # SetComputeUnitLimit verilmezse Solana talimat başına bu kadarını varsayar
 RELAYED = ("notarize", "create_agreement", "co_sign", "attest_identity", "revoke_attestation", "revoke_proof")
 CLUSTER = os.getenv("SOLANA_CLUSTER", "devnet")
 
@@ -126,15 +129,47 @@ class RelayResponse(BaseModel):
     explorer_url: str
 
 
+def max_priority_lamports() -> int:
+    """Bir işlem için relayer'ın ödemeyi kabul ettiği en yüksek öncelik ücreti (lamport)."""
+    return int(os.getenv("RELAY_MAX_PRIORITY_LAMPORTS", "250000"))
+
+
+def _split_compute_budget(msg, keys) -> list:
+    """İşlemde tam olarak bir Notary talimatı olmalı. Cüzdanların (Phantom) kendiliğinden eklediği öncelik ücreti talimatları
+    (ComputeBudget: SetComputeUnitLimit ve SetComputeUnitPrice, hesapsız, her biri en fazla bir kez) kabul edilir, ama relayer'ın
+    ödeyeceği toplam öncelik ücreti sınırlıdır. Başka hiçbir ek talimata izin verilmez. Notary talimatlarını döner."""
+    main, limit, price = [], None, None
+    for ix in msg.instructions:
+        if keys[ix.program_id_index] != COMPUTE_BUDGET_PROGRAM:
+            main.append(ix)
+            continue
+        data = bytes(ix.data)
+        if len(ix.accounts) != 0:
+            raise HTTPException(400, "Compute-budget instructions take no accounts.")
+        if data[:1] == bytes([SET_COMPUTE_UNIT_LIMIT]) and len(data) == 5 and limit is None:
+            limit = int.from_bytes(data[1:5], "little")
+        elif data[:1] == bytes([SET_COMPUTE_UNIT_PRICE]) and len(data) == 9 and price is None:
+            price = int.from_bytes(data[1:9], "little")
+        else:
+            raise HTTPException(400, "Only one SetComputeUnitLimit and one SetComputeUnitPrice compute-budget instruction are allowed.")
+    if len(main) != 1:
+        raise HTTPException(400, "Expected exactly one Notary instruction (optionally with compute-budget instructions).")
+    fee = -(-((price or 0) * (limit if limit is not None else DEFAULT_CU_LIMIT)) // 1_000_000)  # yukarı yuvarla
+    if fee > max_priority_lamports():
+        raise HTTPException(400, f"Priority fee too high for the relayer ({fee} > {max_priority_lamports()} lamports). Lower it in your wallet.")
+    return main
+
+
 def _validate(tx: Transaction, relayer: Pubkey, prog: Pubkey) -> tuple[str, Pubkey]:
     """Kuralları denetler; (talimat türü, hedef hesap) döner."""
     msg = tx.message
     keys = list(msg.account_keys)
     if keys[0] != relayer:
         raise HTTPException(400, "Fee payer must be the relayer (see GET /relay/info).")
-    if msg.header.num_required_signatures != 2 or len(msg.instructions) != 1:
-        raise HTTPException(400, "Expected exactly one instruction signed by the signer and the relayer.")
-    ix = msg.instructions[0]
+    if msg.header.num_required_signatures != 2:
+        raise HTTPException(400, "Expected exactly two signers: the relayer (fee payer) and your wallet.")
+    main = _split_compute_budget(msg, keys)
+    ix = main[0]
     if keys[ix.program_id_index] != prog:
         raise HTTPException(400, "Instruction does not target the Notary program.")
     data = bytes(ix.data)
