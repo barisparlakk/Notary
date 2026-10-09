@@ -2,7 +2,7 @@
 v2 relayer (CONTRACT.md v2, Bölüm 7): kullanıcının SOL'ü olmasa da `notarize` işlemini gönderir.
 
 Güvenlik: kayıt doğruluk kaynağı DEĞİLDİR; yalnızca ücreti öder. Bu yüzden yalnızca şu işlemleri imzalar:
-  - tek talimat, hedef program = PROGRAM_ID, talimat = notarize | create_agreement | co_sign
+  - tek talimat, hedef program = PROGRAM_ID, talimat = notarize | create_agreement | co_sign | attest_identity | revoke_attestation | revoke_proof
   - ücret ödeyen (fee payer) = relayer, `signer` = relayer DEĞİL (aksi halde relayer adına sahte kayıt atılırdı)
   - `signer`'ın imzası geçerli
 Hız sınırı IP başına dakikada RELAY_RATE_LIMIT (varsayılan 10). Vercel'de her örnek ayrı bellektir; örnekler arası
@@ -34,8 +34,14 @@ router = APIRouter(prefix="/relay", tags=["relay"])
 NOTARIZE_DISC = hashlib.sha256(b"global:notarize").digest()[:8]
 CREATE_AGREEMENT_DISC = hashlib.sha256(b"global:create_agreement").digest()[:8]
 CO_SIGN_DISC = hashlib.sha256(b"global:co_sign").digest()[:8]
+ATTEST_IDENTITY_DISC = hashlib.sha256(b"global:attest_identity").digest()[:8]
+REVOKE_ATTESTATION_DISC = hashlib.sha256(b"global:revoke_attestation").digest()[:8]
+REVOKE_PROOF_DISC = hashlib.sha256(b"global:revoke_proof").digest()[:8]
+MIN_ATTEST_DATA_LEN = 8 + 32 + 4 + 1 + 32 + 8  # discriminator + subject + etiket uzunluğu + en az 1 bayt etiket + claim + expires_at
+MAX_ATTEST_DATA_LEN = 8 + 32 + 4 + 32 + 32 + 8  # etiket en çok 32 bayt
 MAX_DATA_LEN = 8 + 32 + 33 + 4 + 32 * 4  # discriminator + hash + Some(receiver) + vec len + 4 parent
 MAX_AGREEMENT_DATA_LEN = 8 + 32 + 4 + 32 * 4  # discriminator + hash + vec len + 4 taraf
+RELAYED = ("notarize", "create_agreement", "co_sign", "attest_identity", "revoke_attestation", "revoke_proof")
 CLUSTER = os.getenv("SOLANA_CLUSTER", "devnet")
 
 _hits: dict[str, deque] = defaultdict(deque)
@@ -97,7 +103,7 @@ class RelayResponse(BaseModel):
     tx_signature: str
     proof_pda: str  # geriye uyumluluk: `account` ile aynı değer
     account: str  # oluşan/etkilenen hesap (Proof ya da Agreement PDA'sı)
-    kind: str  # notarize | create_agreement | co_sign
+    kind: str  # notarize | create_agreement | co_sign | attest_identity | revoke_attestation | revoke_proof
     explorer_url: str
 
 
@@ -122,17 +128,25 @@ def _validate(tx: Transaction, relayer: Pubkey, prog: Pubkey) -> tuple[str, Pubk
         kind = "create_agreement"
     elif data[:8] == CO_SIGN_DISC and len(data) == 8:
         kind = "co_sign"
+    elif data[:8] == ATTEST_IDENTITY_DISC and MIN_ATTEST_DATA_LEN <= len(data) <= MAX_ATTEST_DATA_LEN:
+        kind = "attest_identity"
+    elif data[:8] == REVOKE_ATTESTATION_DISC and len(data) == 8:
+        kind = "revoke_attestation"
+    elif data[:8] == REVOKE_PROOF_DISC and len(data) == 8:
+        kind = "revoke_proof"
     else:
-        raise HTTPException(400, "Only notarize, create_agreement and co_sign are relayed.")
+        raise HTTPException(400, f"Only {', '.join(RELAYED)} are relayed.")
 
-    if kind == "co_sign":
+    if kind in ("co_sign", "revoke_attestation"):  # ücret ödeyen yok: imzalayan + hedef hesap
         if len(accounts) != 2:
-            raise HTTPException(400, "co_sign takes 2 accounts.")
+            raise HTTPException(400, f"{kind} takes 2 accounts.")
         signer, target = accounts
-    else:
-        if len(accounts) != 4:
-            raise HTTPException(400, f"{kind} takes 4 accounts.")
-        signer, payer, target, system = accounts
+    else:  # signer, payer, ...hedefler, system_program
+        want = 5 if kind == "revoke_proof" else 4
+        if len(accounts) != want:
+            raise HTTPException(400, f"{kind} takes {want} accounts.")
+        signer, payer, system = accounts[0], accounts[1], accounts[-1]
+        target = accounts[3] if kind == "revoke_proof" else accounts[2]  # revoke_proof: [signer, payer, proof, revocation, system]
         if payer != relayer:
             raise HTTPException(400, "Payer account must be the relayer.")
         if system != SYSTEM_PROGRAM_ID:

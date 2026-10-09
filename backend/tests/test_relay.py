@@ -267,3 +267,81 @@ def test_shared_counter_failure_falls_back_to_memory(client, monkeypatch):
     monkeypatch.setattr(relay.httpx, "AsyncClient", Boom)
     codes = [post(client, build_tx(Keypair())[0]).status_code for _ in range(2)]
     assert codes == [200, 429]  # bellek içi sayaç devreye girdi
+
+
+# ---------------------------------------------------------------- kimlik ve iptal talimatları
+ATTEST_DISC = hashlib.sha256(b"global:attest_identity").digest()[:8]
+REVOKE_ATT_DISC = hashlib.sha256(b"global:revoke_attestation").digest()[:8]
+REVOKE_PROOF_DISC = hashlib.sha256(b"global:revoke_proof").digest()[:8]
+
+
+def attest_data(label=b"Ahmet"):
+    return ATTEST_DISC + bytes(Keypair().pubkey()) + struct.pack("<I", len(label)) + label + b"\x00" * 32 + struct.pack("<q", 0)
+
+
+def generic_tx(signer, data, accounts, *, sign=True, fee_payer=RELAYER.pubkey()):
+    ix = Instruction(PROGRAM, data, accounts)
+    bh = Hash.new_unique()
+    tx = Transaction.new_unsigned(Message.new_with_blockhash([ix], fee_payer, bh))
+    if sign:
+        tx.partial_sign([signer], bh)
+    return tx
+
+
+def attest_tx(issuer, data=None, payer=RELAYER.pubkey()):
+    pda = Keypair().pubkey()
+    return generic_tx(issuer, data or attest_data(), [
+        AccountMeta(issuer.pubkey(), True, False), AccountMeta(payer, True, True),
+        AccountMeta(pda, False, True), AccountMeta(SYSTEM_PROGRAM_ID, False, False)]), pda
+
+
+def revoke_proof_tx(signer, *, with_system=True, payer=RELAYER.pubkey()):
+    proof, rev = Keypair().pubkey(), Keypair().pubkey()
+    accts = [AccountMeta(signer.pubkey(), True, False), AccountMeta(payer, True, True),
+             AccountMeta(proof, False, False), AccountMeta(rev, False, True)]
+    if with_system:
+        accts.append(AccountMeta(SYSTEM_PROGRAM_ID, False, False))
+    return generic_tx(signer, REVOKE_PROOF_DISC, accts), rev
+
+
+def test_relays_attest_identity(client, env):
+    issuer = Keypair()
+    tx, pda = attest_tx(issuer)
+    res = post(client, tx)
+    assert res.status_code == 200, res.text
+    assert res.json()["kind"] == "attest_identity" and res.json()["account"] == str(pda)
+    Transaction.from_bytes(base64.b64decode(env[0])).verify()
+
+
+def test_relays_revoke_attestation(client, env):
+    issuer, att = Keypair(), Keypair().pubkey()
+    tx = generic_tx(issuer, REVOKE_ATT_DISC, [AccountMeta(issuer.pubkey(), True, False), AccountMeta(att, False, True)])
+    res = post(client, tx)
+    assert res.status_code == 200, res.text
+    assert res.json()["kind"] == "revoke_attestation" and res.json()["account"] == str(att)
+
+
+def test_relays_revoke_proof_and_targets_the_revocation_account(client, env):
+    signer = Keypair()
+    tx, rev = revoke_proof_tx(signer)
+    res = post(client, tx)
+    assert res.status_code == 200, res.text
+    assert res.json()["kind"] == "revoke_proof" and res.json()["account"] == str(rev)
+    Transaction.from_bytes(base64.b64decode(env[0])).verify()
+
+
+def test_identity_and_revocation_instructions_reject_abuse(client):
+    me = Keypair()
+    assert post(client, attest_tx(me, payer=me.pubkey())[0]).status_code == 400  # payer relayer değil
+    assert post(client, attest_tx(me, data=attest_data(b"x" * 33))[0]).status_code == 400  # etiket çok uzun
+    assert post(client, attest_tx(me, data=attest_data(b"")[:-1])[0]).status_code == 400  # kısa/bozuk veri
+    unsigned = generic_tx(me, attest_data(), [AccountMeta(me.pubkey(), True, False), AccountMeta(RELAYER.pubkey(), True, True),
+                                             AccountMeta(Keypair().pubkey(), False, True), AccountMeta(SYSTEM_PROGRAM_ID, False, False)], sign=False)
+    assert post(client, unsigned).status_code == 400  # signer imzası yok
+    assert post(client, revoke_proof_tx(me, with_system=False)[0]).status_code == 400  # hesap sayısı eksik
+    assert post(client, revoke_proof_tx(me, payer=me.pubkey())[0]).status_code == 400  # payer relayer değil
+    extra = generic_tx(me, REVOKE_ATT_DISC + b"\x01", [AccountMeta(me.pubkey(), True, False), AccountMeta(Keypair().pubkey(), False, True)])
+    assert post(client, extra).status_code == 400  # fazladan veri
+    as_relayer = Instruction(PROGRAM, REVOKE_ATT_DISC, [AccountMeta(RELAYER.pubkey(), True, False), AccountMeta(Keypair().pubkey(), False, True)])
+    tx = Transaction.new_unsigned(Message.new_with_blockhash([as_relayer], RELAYER.pubkey(), Hash.new_unique()))
+    assert post(client, tx).status_code == 400  # relayer imzalayan olamaz
