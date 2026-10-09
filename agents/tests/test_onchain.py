@@ -1,5 +1,6 @@
 # v2 zincir istemcisi: docs/test_vectors_v2.json vektörü + sahte RPC'ye karşı uçtan uca (API yok).
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -298,3 +299,79 @@ def test_agreement_golden_vectors():
     full = onchain.decode_agreement(bytes.fromhex(g["account_all_signed_hex"]))
     assert full["complete"] and [p["signer"] for p in full["parties"]] == g["parties"]
     assert full["parties"][2]["signed_at"] == g["created_at_unix"] + 120 and full["bump"] == g["bump"]
+
+
+# ---------------------------------------------------------------- iptal ve kimlik (CONTRACT.md 4a)
+def test_revoke_proof_changes_status_but_keeps_record(chain):
+    rpc, _ = chain
+    owner, other, data = kp(0x50), kp(0x51), b"to be revoked"
+    out = onchain.notarize(rpc, owner, onchain.sha256_bytes(data), program_id=V["program_id"])
+    assert onchain.verify(rpc, data, pda=out["proof_pda"], program_id=V["program_id"])["status"] == "VERIFIED"
+    with pytest.raises(onchain.ChainError):
+        onchain.revoke_proof(rpc, other, out["proof_pda"], program_id=V["program_id"])
+    onchain.revoke_proof(rpc, owner, out["proof_pda"], program_id=V["program_id"])
+    res = onchain.verify(rpc, data, pda=out["proof_pda"], program_id=V["program_id"])
+    assert res["status"] == "REVOKED" and res["revocation"]["signer"] == str(owner.pubkey())
+    assert onchain.verify(rpc, data, program_id=V["program_id"])["status"] == "REVOKED"  # hash ile aramada da
+    assert onchain.verify(rpc, data + b"!", pda=out["proof_pda"], program_id=V["program_id"])["status"] == "INVALID"
+    with pytest.raises(onchain.ChainError):
+        onchain.revoke_proof(rpc, owner, out["proof_pda"], program_id=V["program_id"])
+
+
+def test_identity_levels_trust_expiry_revocation(chain):
+    rpc, _ = chain
+    pid, person, issuer = V["program_id"], kp(0x60), kp(0x61)
+    p, trust = str(person.pubkey()), {str(issuer.pubkey()): {"label": "Demo Issuer"}}
+    assert onchain.resolve_identity(rpc, p, pid, trust)["level"] == "none"
+
+    onchain.attest_identity(rpc, person, person.pubkey(), "Ahmet", b"self", program_id=pid)
+    assert onchain.resolve_identity(rpc, p, pid, trust)["level"] == "self_declared"
+
+    onchain.attest_identity(rpc, issuer, person.pubkey(), "Ahmet Yilmaz", b"kyc", expires_at=int(time.time()) + 100, program_id=pid)
+    ident = onchain.resolve_identity(rpc, p, pid, trust)
+    assert (ident["level"], ident["label"], ident["best"]["issuer_label"]) == ("trusted", "Ahmet Yilmaz", "Demo Issuer")
+    assert onchain.resolve_identity(rpc, p, pid, {})["level"] == "unrecognized_issuer"
+    assert onchain.resolve_identity(rpc, p, pid, trust, now=int(time.time()) + 200)["level"] == "self_declared"  # süre doldu
+
+    onchain.revoke_attestation(rpc, issuer, person.pubkey(), program_id=pid)
+    ident = onchain.resolve_identity(rpc, p, pid, trust)
+    assert ident["level"] == "self_declared" and any(c["state"] == "revoked" for c in ident["claims"])
+    with pytest.raises(onchain.ChainError):
+        onchain.revoke_attestation(rpc, issuer, person.pubkey(), program_id=pid)
+    onchain.attest_identity(rpc, issuer, person.pubkey(), "Ahmet Yilmaz", b"renewed", program_id=pid)  # yenileme
+    assert onchain.resolve_identity(rpc, p, pid, trust)["level"] == "trusted"
+
+
+def test_attestation_rules_and_wire_format(chain):
+    rpc, _ = chain
+    person = kp(0x62)
+    with pytest.raises(onchain.ChainError):
+        onchain.attest_identity(rpc, person, person.pubkey(), "", b"x", program_id=V["program_id"])
+    with pytest.raises(onchain.ChainError):
+        onchain.attest_identity(rpc, person, person.pubkey(), "x" * 33, b"x", program_id=V["program_id"])
+    with pytest.raises(onchain.ChainError):  # program: geçmişte bitiş
+        onchain.attest_identity(rpc, person, person.pubkey(), "ok", b"x", expires_at=1, program_id=V["program_id"])
+    data = onchain.encode_attest_identity_data(person.pubkey(), "Zoë", onchain.claim_hash(b"e"), 0)  # çok baytlı karakter
+    assert data[:8] == onchain.ATTEST_IDENTITY_DISC and data[40:44] == (4).to_bytes(4, "little") and len(data) == 8 + 32 + 4 + 4 + 32 + 8
+    assert (onchain.ATTESTATION_SIZE, onchain.REVOCATION_SIZE) == (166, 82)
+
+
+def test_verify_identity_is_optional_and_certificate_explains_itself(chain):
+    rpc, _ = chain
+    signer, data = kp(0x63), b"cert doc"
+    out = onchain.notarize(rpc, signer, onchain.sha256_bytes(data), program_id=V["program_id"])
+    res = onchain.verify(rpc, data, pda=out["proof_pda"], program_id=V["program_id"], trust={})
+    assert res["identity"]["level"] == "none"
+    assert "identity" not in onchain.verify(rpc, data, pda=out["proof_pda"], program_id=V["program_id"], identity=False)
+    cert = onchain.build_certificate(out["proof_pda"], onchain.get_proof(rpc, out["proof_pda"]), out["tx_signature"], V["program_id"])
+    assert out["proof_pda"] in cert["how_to_verify"]["cli"] and any("REVOKED" in s for s in cert["how_to_verify"]["steps"])
+    assert cert["version"] == "notary.cert.v1"
+
+
+def test_trust_list_loading(tmp_path):
+    f = tmp_path / "t.json"
+    f.write_text(json.dumps({"issuers": [{"pubkey": "AAA", "label": "X"}]}))
+    assert onchain.load_trust_list(f) == {"AAA": {"pubkey": "AAA", "label": "X"}}
+    assert onchain.load_trust_list(tmp_path / "missing.json") == {}
+    f.write_text("not json")
+    assert onchain.load_trust_list(f) == {}

@@ -51,6 +51,12 @@ class MockChain:
             return self._create_agreement(data, accts, signed)
         if data[:8] == onchain.CO_SIGN_DISC:
             return self._co_sign(accts, signed)
+        if data[:8] == onchain.ATTEST_IDENTITY_DISC:
+            return self._attest_identity(data, accts, signed)
+        if data[:8] == onchain.REVOKE_ATTESTATION_DISC:
+            return self._revoke_attestation(accts, signed)
+        if data[:8] == onchain.REVOKE_PROOF_DISC:
+            return self._revoke_proof(accts, signed)
         if data[:8] != onchain.NOTARIZE_DISC:
             raise ValueError("bilinmeyen talimat")
         signer, payer, proof, sysprog = accts
@@ -136,6 +142,66 @@ class MockChain:
         patched = bytearray(raw)
         struct.pack_into("<q", patched, base + 8 * idx, int(time.time()))
         self.accounts[str(agreement)] = bytes(patched)
+
+    def _attest_identity(self, data, accts, signed):
+        issuer, payer, attestation, sysprog = accts
+        if str(issuer) not in signed or str(payer) not in signed:
+            raise ValueError("issuer/payer imzası eksik")
+        if sysprog != SYSTEM_PROGRAM_ID:
+            raise ValueError("system program yanlış")
+        subject = Pubkey.from_bytes(data[8:40])
+        (n,) = struct.unpack_from("<I", data, 40)
+        label = data[44:44 + n]
+        claim = data[44 + n:76 + n]
+        (expires_at,) = struct.unpack_from("<q", data, 76 + n)
+        if not 1 <= n <= onchain.MAX_LABEL:
+            raise ValueError("BadLabel")
+        now = int(time.time())
+        if expires_at != 0 and expires_at <= now:
+            raise ValueError("BadExpiry")
+        expected, bump = onchain.derive_attestation_pda(self.program_id, issuer, subject)
+        if attestation != expected:
+            raise ValueError("ConstraintSeeds")
+        # init_if_needed: son beyan geçerlidir (yenileme, geri çekilmiş beyanı da tazeler)
+        raw = (onchain.ATTESTATION_DISC + b"\x01" + bytes(issuer) + bytes(subject) + struct.pack("<I", n) + label + claim
+               + struct.pack("<qqq", now, expires_at, 0) + bytes([bump]))
+        self.accounts[str(attestation)] = raw + b"\x00" * (onchain.ATTESTATION_SIZE - len(raw))
+
+    def _revoke_attestation(self, accts, signed):
+        issuer, attestation = accts
+        if str(issuer) not in signed:
+            raise ValueError("issuer imzası eksik")
+        raw = self.accounts.get(str(attestation))
+        if raw is None or raw[:8] != onchain.ATTESTATION_DISC:
+            raise ValueError("AccountNotInitialized")
+        a = onchain.decode_attestation(raw)
+        if a["issuer"] != str(issuer):
+            raise ValueError("NotTheIssuer")
+        if a["revoked_at"]:
+            raise ValueError("AlreadyRevoked")
+        n = len(a["label"].encode("utf-8"))
+        patched = bytearray(raw)
+        struct.pack_into("<q", patched, 8 + 1 + 32 + 32 + 4 + n + 32 + 16, int(time.time()))  # revoked_at
+        self.accounts[str(attestation)] = bytes(patched)
+
+    def _revoke_proof(self, accts, signed):
+        signer, payer, proof, revocation, sysprog = accts
+        if str(signer) not in signed or str(payer) not in signed:
+            raise ValueError("signer/payer imzası eksik")
+        if sysprog != SYSTEM_PROGRAM_ID:
+            raise ValueError("system program yanlış")
+        raw = self.accounts.get(str(proof))
+        if raw is None or raw[:8] != onchain.PROOF_DISC:
+            raise ValueError("AccountNotInitialized")
+        if onchain.decode_proof(raw)["signer"] != str(signer):
+            raise ValueError("NotTheSigner")
+        expected, bump = onchain.derive_revocation_pda(self.program_id, proof)
+        if revocation != expected:
+            raise ValueError("ConstraintSeeds")
+        if str(revocation) in self.accounts:
+            raise ValueError("account already in use")
+        self.accounts[str(revocation)] = (onchain.REVOCATION_DISC + b"\x01" + bytes(proof) + bytes(signer)
+                                          + struct.pack("<q", int(time.time())) + bytes([bump]))
 
     # --- JSON-RPC
     def handle(self, method, params):
