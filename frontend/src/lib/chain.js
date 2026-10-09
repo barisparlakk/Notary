@@ -19,9 +19,20 @@ export const CREATE_AGREEMENT_DISC = Buffer.from('dc9c41acfc444ae9', 'hex');
 export const CO_SIGN_DISC = Buffer.from('b9e20c8538442013', 'hex');
 export const AGREEMENT_DISC = Buffer.from('53d4056ee1f9c554', 'hex');
 
+// Kimlik beyanı ve iptal (CONTRACT.md 4a): sha256("global:<ad>") / sha256("account:<Ad>") ilk 8 bayt, test vektörüyle doğrulanır
+export const ATTEST_IDENTITY_DISC = Buffer.from('a8174380d1da5856', 'hex');
+export const REVOKE_ATTESTATION_DISC = Buffer.from('0c9c67a1c2f6d3b3', 'hex');
+export const REVOKE_PROOF_DISC = Buffer.from('3b75d2754b186475', 'hex');
+export const ATTESTATION_DISC = Buffer.from('987db75624927949', 'hex');
+export const REVOCATION_DISC = Buffer.from('807581e50b9f4fea', 'hex');
+export const MAX_LABEL = 32;
+export const ATTESTATION_SIZE = 166;
+export const REVOCATION_SIZE = 82;
+export const ATTEST_SUBJECT_OFFSET = 41; // disc 8 + version 1 + issuer 32
+
 export class ChainError extends Error {}
 
-export const CERT_NOTICE = 'Timestamped integrity proof recorded on Solana. Not a qualified electronic signature (eIDAS); does not by itself prove the identity of a signer.';
+export const CERT_NOTICE = 'Timestamped integrity proof recorded on Solana. Not a qualified electronic signature (eIDAS); does not by itself prove the identity of a signer. Identity, when shown, comes from attestations by issuers you choose to trust.';
 
 // ------------------------------------------------------------------ yardımcılar
 export const hexToBytes = (hex) => Uint8Array.from(Buffer.from(hex, 'hex'));
@@ -177,6 +188,132 @@ export function buildCoSignInstruction({ programId, signer, agreement }) {
   });
 }
 
+// ------------------------------------------------------------------ kimlik beyanı ve iptal
+const isoOf = (t) => (t ? new Date(t * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z') : null);
+
+/** seeds = ["attest", issuer, subject] */
+export function deriveAttestationPda(programId, issuer, subject) {
+  return PublicKey.findProgramAddressSync([Buffer.from('attest'), pk(issuer).toBuffer(), pk(subject).toBuffer()], pk(programId));
+}
+
+/** seeds = ["revoke", proof_pda] */
+export function deriveRevocationPda(programId, proofPda) {
+  return PublicKey.findProgramAddressSync([Buffer.from('revoke'), pk(proofPda).toBuffer()], pk(programId));
+}
+
+/** Zincir dışı kimlik kanıtının (metin ya da dosya) SHA-256'sı. Kişisel veri zincire yazılmaz; yalnızca bu hash. */
+export const claimHash = (evidence) => sha256Bytes(evidence ?? '');
+
+export function encodeAttestIdentityData(subject, label, claim, expiresAt = 0) {
+  const raw = Buffer.from(label, 'utf8');
+  if (raw.length < 1 || raw.length > MAX_LABEL) throw new ChainError(`etiket 1 ile ${MAX_LABEL} bayt arasında olmalı`);
+  if (claim.length !== 32) throw new ChainError('claim_hash 32 bayt olmalı');
+  const len = Buffer.alloc(4);
+  len.writeUInt32LE(raw.length);
+  const exp = Buffer.alloc(8);
+  exp.writeBigInt64LE(BigInt(expiresAt));
+  return Buffer.concat([ATTEST_IDENTITY_DISC, pk(subject).toBuffer(), len, raw, Buffer.from(claim), exp]);
+}
+
+export function decodeAttestation(data) {
+  const buf = Buffer.from(data);
+  if (!buf.subarray(0, 8).equals(ATTESTATION_DISC)) throw new ChainError('Attestation discriminator uyuşmuyor');
+  let o = 8;
+  const version = buf[o]; o += 1;
+  const issuer = new PublicKey(buf.subarray(o, o + 32)); o += 32;
+  const subject = new PublicKey(buf.subarray(o, o + 32)); o += 32;
+  const n = buf.readUInt32LE(o); o += 4;
+  const label = buf.subarray(o, o + n).toString('utf8'); o += n;
+  const claim = buf.subarray(o, o + 32); o += 32;
+  const createdAt = Number(buf.readBigInt64LE(o));
+  const expiresAt = Number(buf.readBigInt64LE(o + 8));
+  const revokedAt = Number(buf.readBigInt64LE(o + 16));
+  o += 24;
+  return {
+    version, issuer: issuer.toBase58(), subject: subject.toBase58(), label, claim_hash: bytesToHex(claim),
+    created_at: createdAt, created_at_iso: isoOf(createdAt),
+    expires_at: expiresAt, expires_at_iso: isoOf(expiresAt),
+    revoked_at: revokedAt, revoked_at_iso: isoOf(revokedAt),
+    bump: buf[o],
+  };
+}
+
+export function decodeRevocation(data) {
+  const buf = Buffer.from(data);
+  if (!buf.subarray(0, 8).equals(REVOCATION_DISC)) throw new ChainError('Revocation discriminator uyuşmuyor');
+  const revokedAt = Number(buf.readBigInt64LE(8 + 1 + 32 + 32));
+  return {
+    version: buf[8], proof: new PublicKey(buf.subarray(9, 41)).toBase58(), signer: new PublicKey(buf.subarray(41, 73)).toBase58(),
+    revoked_at: revokedAt, revoked_at_iso: isoOf(revokedAt), bump: buf[8 + 1 + 32 + 32 + 8],
+  };
+}
+
+/** valid | expired | revoked (iptal, süre dolmasından önce gelir). */
+export function attestationState(att, now = Math.floor(Date.now() / 1000)) {
+  if (att.revoked_at) return 'revoked';
+  if (att.expires_at && att.expires_at <= now) return 'expired';
+  return 'valid';
+}
+
+/**
+ * Bir cüzdanın kimliği. level: trusted | unrecognized_issuer | self_declared | none.
+ * `trusted`: { [issuerPubkey]: { label } } güven listesi (docs/trusted_issuers.json). Süresi dolmuş/iptal beyanlar sayılmaz.
+ */
+export async function resolveIdentity(chain, subject, trusted = {}, now = Math.floor(Date.now() / 1000)) {
+  const sub = String(subject);
+  const claims = (await chain.listAttestations(sub)).map((a) => {
+    const entry = trusted[a.issuer];
+    return { ...a, state: attestationState(a, now), self: a.issuer === sub, trusted: !!entry && a.issuer !== sub, issuer_label: entry?.label ?? null };
+  });
+  const live = claims.filter((c) => c.state === 'valid');
+  let best = live.find((c) => c.trusted);
+  let level = best ? 'trusted' : null;
+  if (!best) { best = live.find((c) => !c.self); level = best ? 'unrecognized_issuer' : null; }
+  if (!best) { best = live.find((c) => c.self); level = best ? 'self_declared' : 'none'; }
+  return { subject: sub, level, label: best?.label ?? null, best: best ?? null, claims };
+}
+
+export function buildAttestIdentityInstruction({ programId, issuer, payer, subject, label, claim, expiresAt = 0 }) {
+  const [attestation] = deriveAttestationPda(programId, issuer, subject);
+  return new TransactionInstruction({
+    programId: pk(programId),
+    keys: [
+      { pubkey: pk(issuer), isSigner: true, isWritable: false },
+      { pubkey: pk(payer), isSigner: true, isWritable: true },
+      { pubkey: attestation, isSigner: false, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    data: encodeAttestIdentityData(subject, label, claim, expiresAt),
+  });
+}
+
+export function buildRevokeAttestationInstruction({ programId, issuer, subject }) {
+  const [attestation] = deriveAttestationPda(programId, issuer, subject);
+  return new TransactionInstruction({
+    programId: pk(programId),
+    keys: [
+      { pubkey: pk(issuer), isSigner: true, isWritable: false },
+      { pubkey: attestation, isSigner: false, isWritable: true },
+    ],
+    data: REVOKE_ATTESTATION_DISC,
+  });
+}
+
+export function buildRevokeProofInstruction({ programId, signer, payer, proofPda }) {
+  const [revocation] = deriveRevocationPda(programId, proofPda);
+  return new TransactionInstruction({
+    programId: pk(programId),
+    keys: [
+      { pubkey: pk(signer), isSigner: true, isWritable: false },
+      { pubkey: pk(payer), isSigner: true, isWritable: true },
+      { pubkey: pk(proofPda), isSigner: false, isWritable: false },
+      { pubkey: revocation, isSigner: false, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    data: REVOKE_PROOF_DISC,
+  });
+}
+
 export function buildCertificate({ proofPda, proof, txSignature, programId, cluster = 'devnet', verifyUrl }) {
   return {
     version: 'notary.cert.v1',
@@ -191,6 +328,17 @@ export function buildCertificate({ proofPda, proof, txSignature, programId, clus
     tx_signature: txSignature || null,
     explorer_url: `https://explorer.solana.com/address/${proofPda}?cluster=${cluster}`,
     verify_url: verifyUrl || `${globalThis.location?.origin ?? ''}/?tab=verify&pda=${proofPda}`,
+    // Sertifika tek başına bir şey kanıtlamaz; zincirdeki hesaba işaret eder. Herkes bu adımlarla bağımsız doğrulayabilir.
+    how_to_verify: {
+      spec: 'CONTRACT.md section 4',
+      steps: [
+        'hash = sha256(file)',
+        'account = getAccountInfo(proof_pda); owner must be program_id and discriminator must match Proof',
+        'status is VERIFIED if the recorded document_hash equals hash',
+        'check getAccountInfo(find_program_address([b"revoke", proof_pda])) is empty, otherwise the record is REVOKED',
+      ],
+      cli: `python agents/verify_standalone.py <file> --pda ${proofPda} --program ${pk(programId).toBase58()} --rpc <rpc>`,
+    },
   };
 }
 
@@ -226,10 +374,28 @@ function agreementResult(base, agreement, address, fileHash) {
 }
 
 /**
- * VERIFIED | PENDING (çok imzalı sözleşme, tüm taraflar henüz imzalamadı) | INVALID | NOT_FOUND.
- * Zincir arayüzü: getRecord(pda) -> {type:'proof'|'agreement', ...} | null, findByHash, findAgreementsByHash.
+ * VERIFIED | PENDING (çok imzalı sözleşme, tüm taraflar henüz imzalamadı) | REVOKED (imzalayan iptal etmiş) | INVALID | NOT_FOUND.
+ * Zincir arayüzü: getRecord(pda) -> {type:'proof'|'agreement', ...} | null, findByHash, findAgreementsByHash,
+ * getRevocation(proofPda), listAttestations(subject). `trust`: güvenilen yayıncılar; `identity: false` kimlik sorgusunu atlar.
  */
-export async function verifyDocument(chain, fileHash, { pda = null, signer = null } = {}) {
+export async function verifyDocument(chain, fileHash, { pda = null, signer = null, trust = {}, identity = true } = {}) {
+  const out = await verifyCore(chain, fileHash, { pda, signer });
+  if (out.proof && out.status === 'VERIFIED' && chain.getRevocation) {
+    const revocation = await chain.getRevocation(out.proof_pda);
+    if (revocation) { out.status = 'REVOKED'; out.revocation = revocation; }
+  }
+  if (identity && chain.listAttestations) {
+    try {
+      if (out.proof) out.identity = await resolveIdentity(chain, out.proof.signer, trust);
+      else if (out.agreement) {
+        for (const party of out.agreement.parties) party.identity = await resolveIdentity(chain, party.signer, trust);
+      }
+    } catch (err) { out.identity_error = String(err.message || err); } // kimlik tamamlayıcıdır; doğrulamayı düşürmesin
+  }
+  return out;
+}
+
+async function verifyCore(chain, fileHash, { pda = null, signer = null } = {}) {
   const out = { status: 'NOT_FOUND', original_hash: '', received_hash: fileHash, proof_pda: null, proof: null };
   let address = pda;
   if (!address && signer) {
@@ -343,6 +509,18 @@ export class RpcChain {
     return [...seen.values()];
   }
 
+  async getRevocation(proofPda) {
+    const info = await this.connection.getAccountInfo(deriveRevocationPda(this.programId, proofPda)[0]);
+    if (!info || !info.owner.equals(this.programId)) return null;
+    return Buffer.from(info.data).subarray(0, 8).equals(REVOCATION_DISC) ? decodeRevocation(info.data) : null;
+  }
+
+  /** Bir cüzdan hakkındaki tüm kimlik beyanları (memcmp: subject ofseti 41, dataSize 166). */
+  async listAttestations(subject) {
+    const accounts = await this._query(ATTEST_SUBJECT_OFFSET, pk(subject).toBytes(), ATTESTATION_SIZE);
+    return accounts.map(({ pubkey, account }) => ({ ...decodeAttestation(account.data), attestation_pda: pubkey.toBase58() }));
+  }
+
   async _confirm(signature, timeoutMs = 60000) {
     const end = Date.now() + timeoutMs;
     while (Date.now() < end) {
@@ -421,6 +599,36 @@ export class RpcChain {
     return { agreement_pda: agreementPda.toBase58(), ...sent, agreement: await this.getAgreement(agreementPda) };
   }
 
+  /** Kimlik beyanı. subject == signer ise kişinin kendi kaydıdır; aksi halde bir yayıncının onayıdır. Aynı çift için tekrar çağrı yeniler. */
+  async attestIdentity({ signer, subject, label, evidence = '', expiresAt = 0, relay = null }) {
+    const claim = await claimHash(evidence);
+    const [pda] = deriveAttestationPda(this.programId, signer.publicKey, subject);
+    const sent = await this._submit({
+      signer, relay,
+      buildIx: (payer) => buildAttestIdentityInstruction({ programId: this.programId, issuer: signer.publicKey, payer, subject, label, claim, expiresAt }),
+    });
+    return { attestation_pda: pda.toBase58(), ...sent };
+  }
+
+  async revokeAttestation({ signer, subject, relay = null }) {
+    const [pda] = deriveAttestationPda(this.programId, signer.publicKey, subject);
+    const sent = await this._submit({
+      signer, relay,
+      buildIx: () => buildRevokeAttestationInstruction({ programId: this.programId, issuer: signer.publicKey, subject }),
+    });
+    return { attestation_pda: pda.toBase58(), ...sent };
+  }
+
+  /** İmzalayan kendi kaydını iptal eder (kayıt zincirde kalır, durum REVOKED olur). */
+  async revokeProof({ signer, proofPda, relay = null }) {
+    const [revocation] = deriveRevocationPda(this.programId, proofPda);
+    const sent = await this._submit({
+      signer, relay,
+      buildIx: (payer) => buildRevokeProofInstruction({ programId: this.programId, signer: signer.publicKey, payer, proofPda }),
+    });
+    return { revocation_pda: revocation.toBase58(), proof_pda: String(proofPda), ...sent };
+  }
+
   /** Sözleşmedeki kendi payını imzalar. */
   async coSign({ signer, agreementPda, relay = null }) {
     const sent = await this._submit({
@@ -475,6 +683,59 @@ export class MockChain {
   async listAgreementsFor(party) {
     return Object.entries(this._load()).filter(([, v]) => v.agreement?.parties.some((p) => p.signer === String(party)))
       .map(([k, v]) => ({ ...v.agreement, agreement_pda: k, tx_signature: v.tx_signature }));
+  }
+
+  async getRevocation(proofPda) { return this._load()[`revoke:${proofPda}`]?.revocation ?? null; }
+
+  async listAttestations(subject) {
+    return Object.entries(this._load()).filter(([, v]) => v.attestation?.subject === String(subject))
+      .map(([k, v]) => ({ ...v.attestation, attestation_pda: k }));
+  }
+
+  async attestIdentity({ signer, subject, label, evidence = '', expiresAt = 0 }) {
+    const raw = new TextEncoder().encode(label);
+    if (raw.length < 1 || raw.length > MAX_LABEL) throw new ChainError(`BadLabel: etiket 1 ile ${MAX_LABEL} bayt arasında olmalı`);
+    const now = Math.floor(Date.now() / 1000);
+    if (expiresAt && expiresAt <= now) throw new ChainError('BadExpiry: bitiş zamanı 0 (süresiz) ya da gelecekte olmalı');
+    const issuer = pk(signer.publicKey).toBase58();
+    const [pda, bump] = deriveAttestationPda(this.programId, issuer, subject);
+    const db = this._load();
+    db[pda.toBase58()] = { // son beyan geçerlidir (yenileme)
+      attestation: {
+        version: 1, issuer, subject: pk(subject).toBase58(), label, claim_hash: bytesToHex(await claimHash(evidence)),
+        created_at: now, created_at_iso: MockChain._iso(now), expires_at: expiresAt, expires_at_iso: expiresAt ? MockChain._iso(expiresAt) : null,
+        revoked_at: 0, revoked_at_iso: null, bump,
+      },
+    };
+    this._save(db);
+    return { attestation_pda: pda.toBase58(), tx_signature: 'DEMO' + bytesToHex(globalThis.crypto.getRandomValues(new Uint8Array(30))) };
+  }
+
+  async revokeAttestation({ signer, subject }) {
+    const [pda] = deriveAttestationPda(this.programId, signer.publicKey, subject);
+    const db = this._load();
+    const entry = db[pda.toBase58()];
+    if (!entry?.attestation) throw new ChainError('AccountNotInitialized: beyan bulunamadı');
+    if (entry.attestation.revoked_at) throw new ChainError('AlreadyRevoked: beyan zaten geri çekilmiş');
+    const now = Math.floor(Date.now() / 1000);
+    entry.attestation.revoked_at = now;
+    entry.attestation.revoked_at_iso = MockChain._iso(now);
+    this._save(db);
+    return { attestation_pda: pda.toBase58(), tx_signature: 'DEMO' + bytesToHex(globalThis.crypto.getRandomValues(new Uint8Array(30))) };
+  }
+
+  async revokeProof({ signer, proofPda }) {
+    const db = this._load();
+    const proof = db[String(proofPda)]?.proof;
+    if (!proof) throw new ChainError('AccountNotInitialized: kayıt bulunamadı');
+    if (proof.signer !== pk(signer.publicKey).toBase58()) throw new ChainError('NotTheSigner: yalnızca kaydı oluşturan imzalayan iptal edebilir');
+    const key = `revoke:${proofPda}`;
+    if (db[key]) throw new ChainError('account already in use (kayıt zaten iptal edilmiş)');
+    const now = Math.floor(Date.now() / 1000);
+    const [, bump] = deriveRevocationPda(this.programId, proofPda);
+    db[key] = { revocation: { version: 1, proof: String(proofPda), signer: proof.signer, revoked_at: now, revoked_at_iso: MockChain._iso(now), bump } };
+    this._save(db);
+    return { revocation_pda: deriveRevocationPda(this.programId, proofPda)[0].toBase58(), proof_pda: String(proofPda), tx_signature: 'DEMO' + bytesToHex(globalThis.crypto.getRandomValues(new Uint8Array(30))) };
   }
 
   static _iso(t) { return new Date(t * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z'); }

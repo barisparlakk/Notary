@@ -119,3 +119,92 @@ fn agreement_pda_and_data_match_vector() {
     assert_eq!(hex::encode(data), s(a, "create_agreement_data_hex"));
     assert_eq!(Agreement::SPACE as u64, a["account_size"].as_u64().unwrap());
 }
+
+// ---------------------------------------------------------------- kimlik beyanı ve iptal (CONTRACT.md 4a)
+use notary::{Attestation, Revocation};
+
+fn attestation(v: &serde_json::Value, revoked_at: i64) -> Attestation {
+    let i = &v["identity"];
+    let (_, bump) = Pubkey::find_program_address(
+        &[b"attest", key(&s(i, "issuer")).as_ref(), key(&s(i, "subject")).as_ref()],
+        &key(&s(v, "program_id")),
+    );
+    Attestation {
+        version: 1,
+        issuer: key(&s(i, "issuer")),
+        subject: key(&s(i, "subject")),
+        label: s(i, "label"),
+        claim_hash: hash32(&s(i, "claim_hash")),
+        created_at: i["created_at_unix"].as_i64().unwrap(),
+        expires_at: i["expires_at_unix"].as_i64().unwrap(),
+        revoked_at,
+        bump,
+    }
+}
+
+#[test]
+fn attestation_pda_discriminators_and_sizes_match_vector() {
+    let v = v();
+    let i = &v["identity"];
+    let (pda, bump) = Pubkey::find_program_address(
+        &[b"attest", key(&s(i, "issuer")).as_ref(), key(&s(i, "subject")).as_ref()],
+        &key(&s(&v, "program_id")),
+    );
+    assert_eq!(pda.to_string(), s(i, "attestation_pda"));
+    assert_eq!(bump as u64, i["bump"].as_u64().unwrap());
+    assert_eq!(hex::encode(instruction::AttestIdentity::DISCRIMINATOR), s(i, "attest_identity_discriminator_hex"));
+    assert_eq!(hex::encode(instruction::RevokeAttestation::DISCRIMINATOR), s(i, "revoke_attestation_discriminator_hex"));
+    assert_eq!(hex::encode(Attestation::DISCRIMINATOR), s(i, "account_discriminator_hex"));
+    assert_eq!(Attestation::SPACE as u64, i["account_size"].as_u64().unwrap());
+}
+
+#[test]
+fn attest_identity_instruction_data_matches_golden() {
+    let v = v();
+    let i = &v["identity"];
+    let data = instruction::AttestIdentity {
+        subject: key(&s(i, "subject")),
+        label: s(i, "label"),
+        claim_hash: hash32(&s(i, "claim_hash")),
+        expires_at: i["expires_at_unix"].as_i64().unwrap(),
+    }
+    .data();
+    assert_eq!(hex::encode(data), s(i, "attest_identity_data_hex"));
+}
+
+#[test]
+fn attestation_account_bytes_match_golden() {
+    let v = v();
+    let i = &v["identity"];
+    let mut buf = Vec::new();
+    attestation(&v, 0).try_serialize(&mut buf).unwrap();
+    assert_eq!(hex::encode(padded(buf, Attestation::SPACE)), s(i, "account_valid_hex"));
+    let mut buf = Vec::new();
+    attestation(&v, i["revoked_at_unix"].as_i64().unwrap()).try_serialize(&mut buf).unwrap();
+    assert_eq!(hex::encode(padded(buf, Attestation::SPACE)), s(i, "account_revoked_hex"));
+
+    // memcmp ofsetleri: issuer 9, subject 41
+    let raw = hex::decode(s(i, "account_valid_hex")).unwrap();
+    let io = i["issuer_offset"].as_u64().unwrap() as usize;
+    let so = i["subject_offset"].as_u64().unwrap() as usize;
+    assert_eq!(&raw[io..io + 32], key(&s(i, "issuer")).as_ref());
+    assert_eq!(&raw[so..so + 32], key(&s(i, "subject")).as_ref());
+}
+
+#[test]
+fn revocation_pda_and_account_match_golden() {
+    let v = v();
+    let r = &v["revocation"];
+    let proof_pda = key(&s(r, "proof_pda"));
+    let (pda, bump) = Pubkey::find_program_address(&[b"revoke", proof_pda.as_ref()], &key(&s(&v, "program_id")));
+    assert_eq!(pda.to_string(), s(r, "revocation_pda"));
+    assert_eq!(bump as u64, r["bump"].as_u64().unwrap());
+    assert_eq!(hex::encode(instruction::RevokeProof::DISCRIMINATOR), s(r, "revoke_proof_discriminator_hex"));
+    assert_eq!(hex::encode(Revocation::DISCRIMINATOR), s(r, "account_discriminator_hex"));
+    assert_eq!(Revocation::SPACE as u64, r["account_size"].as_u64().unwrap());
+
+    let rev = Revocation { version: 1, proof: proof_pda, signer: key(&s(&v, "signer")), revoked_at: r["revoked_at_unix"].as_i64().unwrap(), bump };
+    let mut buf = Vec::new();
+    rev.try_serialize(&mut buf).unwrap();
+    assert_eq!(hex::encode(buf), s(r, "account_hex"));
+}

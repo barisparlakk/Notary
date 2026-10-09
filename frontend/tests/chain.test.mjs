@@ -280,3 +280,146 @@ test('DEMO sertifikası "devnet" demez; PDF mührü hash\'e bağlı ve geçerli 
   }
   assert.ok(sizes[0] > 30000, 'vektör mühür PDF\'e çizildi');
 });
+
+// ---------------------------------------------------------------- kimlik beyanı ve iptal (CONTRACT.md 4a)
+const ID = V.identity;
+const RV = V.revocation;
+
+test('kimlik/iptal sabitleri, PDA ve boyutlar vektörle aynı (Python ve Rust ile aynı baytlar)', () => {
+  assert.equal(hex(chain.ATTEST_IDENTITY_DISC), ID.attest_identity_discriminator_hex);
+  assert.equal(hex(chain.REVOKE_ATTESTATION_DISC), ID.revoke_attestation_discriminator_hex);
+  assert.equal(hex(chain.ATTESTATION_DISC), ID.account_discriminator_hex);
+  assert.equal(hex(chain.REVOKE_PROOF_DISC), RV.revoke_proof_discriminator_hex);
+  assert.equal(hex(chain.REVOCATION_DISC), RV.account_discriminator_hex);
+  assert.deepEqual([chain.ATTESTATION_SIZE, chain.REVOCATION_SIZE, chain.ATTEST_SUBJECT_OFFSET], [ID.account_size, RV.account_size, ID.subject_offset]);
+  const [att, b1] = chain.deriveAttestationPda(V.program_id, ID.issuer, ID.subject);
+  assert.deepEqual([att.toBase58(), b1], [ID.attestation_pda, ID.bump]);
+  const [rev, b2] = chain.deriveRevocationPda(V.program_id, RV.proof_pda);
+  assert.deepEqual([rev.toBase58(), b2], [RV.revocation_pda, RV.bump]);
+});
+
+test('attest_identity verisi ve hesap çözümleme golden ile aynı', async () => {
+  const claim = await chain.claimHash(ID.evidence_ascii);
+  assert.equal(hex(claim), ID.claim_hash);
+  assert.equal(hex(chain.encodeAttestIdentityData(ID.subject, ID.label, claim, ID.expires_at_unix)), ID.attest_identity_data_hex);
+  const ok = chain.decodeAttestation(Buffer.from(ID.account_valid_hex, 'hex'));
+  assert.deepEqual([ok.issuer, ok.subject, ok.label, ok.claim_hash, ok.revoked_at, ok.expires_at, ok.bump],
+    [ID.issuer, ID.subject, ID.label, ID.claim_hash, 0, ID.expires_at_unix, ID.bump]);
+  const revoked = chain.decodeAttestation(Buffer.from(ID.account_revoked_hex, 'hex'));
+  assert.equal(revoked.revoked_at, ID.revoked_at_unix);
+  const r = chain.decodeRevocation(Buffer.from(RV.account_hex, 'hex'));
+  assert.deepEqual([r.proof, r.signer, r.revoked_at, r.bump], [RV.proof_pda, V.signer, RV.revoked_at_unix, RV.bump]);
+  assert.throws(() => chain.decodeAttestation(Buffer.alloc(166)), /discriminator/);
+  assert.throws(() => chain.encodeAttestIdentityData(ID.subject, '', claim), /1 ile 32/);
+  assert.throws(() => chain.encodeAttestIdentityData(ID.subject, 'x'.repeat(33), claim), /1 ile 32/);
+});
+
+test('attestationState: iptal süre dolmasından önce gelir', () => {
+  const base = chain.decodeAttestation(Buffer.from(ID.account_valid_hex, 'hex'));
+  const t0 = ID.created_at_unix;
+  assert.equal(chain.attestationState(base, t0 + 10), 'valid');
+  assert.equal(chain.attestationState(base, ID.expires_at_unix + 1), 'expired');
+  assert.equal(chain.attestationState({ ...base, revoked_at: t0 + 5 }, ID.expires_at_unix + 1), 'revoked');
+});
+
+test('MockChain: iptal, kimlik düzeyleri, güven listesi, yenileme', async () => {
+  const mock = new chain.MockChain(V.program_id, memStorage());
+  const [person, issuer, other] = [1, 2, 3].map(() => chain.newDemoSigner());
+  const trust = { [issuer.publicKey.toBase58()]: { label: 'Demo Issuer' } };
+  const p = person.publicKey.toBase58();
+
+  // iptal
+  const h = await chain.sha256Hex('to be revoked');
+  const out = await mock.notarize({ signer: person, hashHex: h });
+  assert.equal((await chain.verifyDocument(mock, h, { pda: out.proof_pda, trust })).status, 'VERIFIED');
+  await assert.rejects(mock.revokeProof({ signer: other, proofPda: out.proof_pda }), /NotTheSigner/);
+  await mock.revokeProof({ signer: person, proofPda: out.proof_pda });
+  const rev = await chain.verifyDocument(mock, h, { pda: out.proof_pda, trust });
+  assert.equal(rev.status, 'REVOKED');
+  assert.equal(rev.revocation.signer, p);
+  assert.equal((await chain.verifyDocument(mock, h)).status, 'REVOKED'); // hash ile aramada da
+  assert.equal((await chain.verifyDocument(mock, await chain.sha256Hex('x'), { pda: out.proof_pda })).status, 'INVALID');
+  await assert.rejects(mock.revokeProof({ signer: person, proofPda: out.proof_pda }), /already in use/);
+
+  // kimlik
+  assert.equal((await chain.resolveIdentity(mock, p, trust)).level, 'none');
+  await mock.attestIdentity({ signer: person, subject: person.publicKey, label: 'Ahmet', evidence: 'self' });
+  assert.equal((await chain.resolveIdentity(mock, p, trust)).level, 'self_declared');
+  await mock.attestIdentity({ signer: issuer, subject: person.publicKey, label: 'Ahmet Yilmaz', evidence: 'kyc' });
+  const ident = await chain.resolveIdentity(mock, p, trust);
+  assert.deepEqual([ident.level, ident.label, ident.best.issuer_label], ['trusted', 'Ahmet Yilmaz', 'Demo Issuer']);
+  assert.equal((await chain.resolveIdentity(mock, p, {})).level, 'unrecognized_issuer');
+  assert.equal((await chain.resolveIdentity(mock, p, trust, Math.floor(Date.now() / 1000) + 10 * 365 * 86400)).level, 'trusted'); // süresiz
+  await assert.rejects(mock.attestIdentity({ signer: person, subject: p, label: '' }), /BadLabel/);
+  await assert.rejects(mock.attestIdentity({ signer: person, subject: p, label: 'ok', expiresAt: 1 }), /BadExpiry/);
+
+  await mock.revokeAttestation({ signer: issuer, subject: person.publicKey });
+  const after = await chain.resolveIdentity(mock, p, trust);
+  assert.equal(after.level, 'self_declared');
+  assert.ok(after.claims.some((c) => c.state === 'revoked'));
+  await assert.rejects(mock.revokeAttestation({ signer: issuer, subject: person.publicKey }), /AlreadyRevoked/);
+  await mock.attestIdentity({ signer: issuer, subject: person.publicKey, label: 'Ahmet Yilmaz', evidence: 'renewed' }); // yenileme
+  assert.equal((await chain.resolveIdentity(mock, p, trust)).level, 'trusted');
+
+  // doğrulama kimliği taşır; identity:false ek sorgu yapmaz
+  const h2 = await chain.sha256Hex('signed by a trusted person');
+  const o2 = await mock.notarize({ signer: person, hashHex: h2 });
+  const res = await chain.verifyDocument(mock, h2, { pda: o2.proof_pda, trust });
+  assert.equal(res.identity.level, 'trusted');
+  assert.equal((await chain.verifyDocument(mock, h2, { pda: o2.proof_pda, identity: false })).identity, undefined);
+});
+
+test('relay yolu: attest_identity ve revoke_proof ücret ödeyen relayer ile kurulur', async () => {
+  const { Transaction, Keypair: Kp } = await import('@solana/web3.js');
+  const relayer = Kp.generate();
+  const [alice, bob] = [Kp.generate(), Kp.generate()];
+  const bodies = [];
+  globalThis.fetch = async (url, init) => {
+    if (url.endsWith('/relay/info')) return { ok: true, json: async () => ({ enabled: true, relayer_pubkey: relayer.publicKey.toBase58() }) };
+    bodies.push(JSON.parse(init.body));
+    return { ok: true, json: async () => ({ tx_signature: 'SIG' }) };
+  };
+  const connection = { getLatestBlockhash: async () => ({ blockhash: '11111111111111111111111111111111' }), getAccountInfo: async () => null };
+  const rpc = new chain.RpcChain(connection, V.program_id);
+  const signer = { publicKey: alice.publicKey, keypair: alice };
+  await rpc.attestIdentity({ signer, subject: bob.publicKey, label: 'Bob', evidence: 'x', relay: 'https://api.test' });
+  const [proofPda] = chain.deriveProofPda(V.program_id, alice.publicKey, chain.hexToBytes(V.document_hash));
+  await rpc.revokeProof({ signer, proofPda, relay: 'https://api.test' });
+  await rpc.revokeAttestation({ signer, subject: bob.publicKey, relay: 'https://api.test' });
+
+  const [att, rp, ra] = bodies.map((b) => Transaction.from(Buffer.from(b.tx_base64, 'base64')));
+  for (const tx of [att, rp, ra]) assert.equal(tx.feePayer.toBase58(), relayer.publicKey.toBase58());
+  assert.ok(att.instructions[0].data.subarray(0, 8).equals(chain.ATTEST_IDENTITY_DISC));
+  assert.equal(att.instructions[0].keys.length, 4);
+  assert.equal(att.instructions[0].keys[1].pubkey.toBase58(), relayer.publicKey.toBase58()); // payer = relayer
+  assert.deepEqual(rp.instructions[0].data, chain.REVOKE_PROOF_DISC);
+  assert.equal(rp.instructions[0].keys.length, 5);
+  assert.equal(rp.instructions[0].keys[3].pubkey.toBase58(), chain.deriveRevocationPda(V.program_id, proofPda)[0].toBase58());
+  assert.deepEqual(ra.instructions[0].data, chain.REVOKE_ATTESTATION_DISC);
+  assert.equal(ra.instructions[0].keys.length, 2);
+});
+
+test('RpcChain.listAttestations subject ofseti ve dataSize ile sorgular; getRevocation PDA\'yı okur', async () => {
+  const acc = Buffer.from(ID.account_valid_hex, 'hex');
+  let seen;
+  const connection = {
+    getProgramAccounts: async (_p, { filters }) => { seen = filters; return [{ pubkey: new PublicKey(ID.attestation_pda), account: { data: acc } }]; },
+    getAccountInfo: async (key) => (key.toBase58() === RV.revocation_pda
+      ? { owner: new PublicKey(V.program_id), data: Buffer.from(RV.account_hex, 'hex') } : null),
+  };
+  const rpc = new chain.RpcChain(connection, V.program_id);
+  const list = await rpc.listAttestations(ID.subject);
+  assert.equal(seen[0].dataSize, 166);
+  assert.equal(seen[1].memcmp.offset, 41);
+  assert.equal(list[0].attestation_pda, ID.attestation_pda);
+  assert.equal((await rpc.getRevocation(RV.proof_pda)).signer, V.signer);
+  assert.equal(await rpc.getRevocation(ID.attestation_pda), null); // iptali olmayan kayıt
+});
+
+test('sertifika kendi kendini açıklar: nasıl doğrulanır', () => {
+  const proof = chain.decodeProof(Buffer.from(V.golden.proof_account_no_receiver_no_parents_hex, 'hex'));
+  const c = chain.buildCertificate({ proofPda: V.proof_pda, proof, txSignature: 'sig', programId: V.program_id, verifyUrl: 'x' });
+  assert.ok(c.how_to_verify.cli.includes(V.proof_pda) && c.how_to_verify.cli.includes(V.program_id));
+  assert.ok(c.how_to_verify.steps.some((s) => s.includes('REVOKED')));
+  assert.match(c.notice, /attestations by issuers you choose to trust/);
+});

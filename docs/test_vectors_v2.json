@@ -43,5 +43,36 @@
     "account_all_signed_hex": "53d4056ee1f9c554012152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12055e95ec4e2aa4543afa1569901d08fff259d0deb8e81cea80b434b4aa601d27a849c16a00000000030000002152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db1222fc297792f0b6ffc0bfcfdb7edb0c0aa14e025a365ec0e342e86e3829cb74b6d759793bbc13a2819a827c76adb6fba8a49aee007f49f2d0992d99b825ad2c4803000000a849c16a00000000e449c16a00000000204ac16a00000000fe00000000000000000000000000000000000000000000000000000000000000000000000000000000",
     "created_at_unix": 1791052200
   },
-  "account_size_proof": 247
+  "account_size_proof": 247,
+  "identity": {
+    "issuer": "3F5qRPtKg8GhGNnbd3qCj6nVJxWsGxq7pvH84okYLAqf",
+    "subject": "3MZskhKUdNRkeMQ6zyNVSJcCx38o79ohwmSgZ2d5a4cu",
+    "label": "Ahmet Yilmaz",
+    "evidence_ascii": "Notary Test Vector Identity v1",
+    "claim_hash": "a4b41304789fcb616c69e3df8def552a381bea6706f32abac4de537b4fa0ac7c",
+    "created_at_unix": 1791052200,
+    "expires_at_unix": 1822588200,
+    "revoked_at_unix": 1791138600,
+    "attestation_pda": "7jmUyKACp7FaGJvjAXGa6evwGbQxkaaFZzRF6SSeZ8tv",
+    "bump": 255,
+    "attest_identity_discriminator_hex": "a8174380d1da5856",
+    "revoke_attestation_discriminator_hex": "0c9c67a1c2f6d3b3",
+    "account_discriminator_hex": "987db75624927949",
+    "account_size": 166,
+    "issuer_offset": 9,
+    "subject_offset": 41,
+    "attest_identity_data_hex": "a8174380d1da585622fc297792f0b6ffc0bfcfdb7edb0c0aa14e025a365ec0e342e86e3829cb74b60c00000041686d65742059696c6d617aa4b41304789fcb616c69e3df8def552a381bea6706f32abac4de537b4fa0ac7c287da26c00000000",
+    "account_valid_hex": "987db75624927949012152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db1222fc297792f0b6ffc0bfcfdb7edb0c0aa14e025a365ec0e342e86e3829cb74b60c00000041686d65742059696c6d617aa4b41304789fcb616c69e3df8def552a381bea6706f32abac4de537b4fa0ac7ca849c16a00000000287da26c000000000000000000000000ff0000000000000000000000000000000000000000",
+    "account_revoked_hex": "987db75624927949012152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db1222fc297792f0b6ffc0bfcfdb7edb0c0aa14e025a365ec0e342e86e3829cb74b60c00000041686d65742059696c6d617aa4b41304789fcb616c69e3df8def552a381bea6706f32abac4de537b4fa0ac7ca849c16a00000000287da26c00000000289bc26a00000000ff0000000000000000000000000000000000000000"
+  },
+  "revocation": {
+    "proof_pda": "BQmtqeNo2zJmpAKyj9b1ddGgMLPwMDaX62JHCH9e3fV2",
+    "revocation_pda": "6ZSvTiddX32RcdR16aBx9KeqGQANVZ2jWtmEH7HgHhka",
+    "bump": 253,
+    "revoke_proof_discriminator_hex": "3b75d2754b186475",
+    "account_discriminator_hex": "807581e50b9f4fea",
+    "account_size": 82,
+    "revoked_at_unix": 1791138600,
+    "account_hex": "807581e50b9f4fea019aabfd4aaa079156aaeed9c78b9ed0f874d0660182f381efc40326ed86ae6bd12152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12289bc26a00000000fd"
+  }
 }
