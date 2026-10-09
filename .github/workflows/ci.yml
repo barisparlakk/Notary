@@ -35,6 +35,21 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  # Program kodu ve IDL: Rust vektör testleri (docs/test_vectors_v2.json ile aynı baytlar) ve IDL'in güncel olduğu.
+  program:
+    name: program unit tests and IDL
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: cd program && cargo test --manifest-path programs/notary/Cargo.toml
+      - name: IDL is up to date
+        run: |
+          python3 scripts/build-idl.py --check || { echo "program/idl/notary.json is stale. Run python3 scripts/build-idl.py and commit it."; exit 1; }
+
   # Programı gerçek bir Solana runtime'ında sınar: derle, yerel doğrulayıcıya yükle, agents ve frontend e2e + relay.
   onchain:
     name: program on a real validator
@@ -89,7 +104,7 @@ jobs:
           cd agents
           NOTARY_TEST_RPC=http://127.0.0.1:8899 NOTARY_TEST_PROGRAM="$PROGRAM_ID" NOTARY_TEST_FUNDER="$RUNNER_TEMP/funder.json" \
             python -m pytest -q tests/test_realchain.py
-          python demo_v2.py --rpc http://127.0.0.1:8899 --program "$PROGRAM_ID" --funder "$RUNNER_TEMP/funder.json" --chain --agreement --delay 0
+          python demo_v2.py --rpc http://127.0.0.1:8899 --program "$PROGRAM_ID" --funder "$RUNNER_TEMP/funder.json" --chain --agreement --identity --delay 0
 
       - name: Frontend e2e with the relayer
         run: |
@@ -101,6 +116,9 @@ jobs:
           solana transfer "$RELAYER" 3 --from "$RUNNER_TEMP/funder.json" --fee-payer "$RUNNER_TEMP/funder.json" \
             --url http://127.0.0.1:8899 --allow-unfunded-recipient
           sleep 2
+          # Kullanıcının SOL'ü olmadan kayıt, kimlik, iptal: relayer üzerinden gerçek programa
+          (cd ../agents && NOTARY_TEST_RELAY=http://127.0.0.1:8765 NOTARY_TEST_RPC=http://127.0.0.1:8899 NOTARY_TEST_PROGRAM="$PROGRAM_ID" \
+            NOTARY_TEST_FUNDER="$RUNNER_TEMP/funder.json" python -m pytest -q tests/test_realchain.py -k relay)
           cd ../frontend && npm ci
           RPC_URL=http://127.0.0.1:8899 PROGRAM_ID="$PROGRAM_ID" RELAY_URL=http://127.0.0.1:8765 FUNDER="$RUNNER_TEMP/funder.json" \
             npm run e2e:local

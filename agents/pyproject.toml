@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "notary-verify"
+version = "0.2.0"
+description = "Independent verifier and client for Notary proofs on Solana. No API needed, only an RPC."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["requests", "solders"]
+
+[project.optional-dependencies]
+agents = ["rich", "reportlab", "anthropic", "fastapi", "uvicorn", "python-multipart"]
+
+[project.scripts]
+notary-verify = "verify_standalone:main"
+notary-issuer = "issuer:main"
+
+[tool.setuptools]
+py-modules = ["onchain", "verify_standalone", "issuer"]

@@ -73,11 +73,44 @@ Hesap **250** bayt ayrılır.
 - Sözleşme, **tüm `signed_at` değerleri sıfırdan farklı olunca tamamlanmıştır** (istemci hesaplar).
 
 ### 3.5 Hesap türlerini ayırma
-`Proof` ve `Agreement` hash'i aynı ofsette (41) tutar. `getProgramAccounts` sorgularında **`dataSize` süzgeci zorunludur**: `Proof` = 247, `Agreement` = 250.
+`Proof` ve `Agreement` hash'i aynı ofsette (41) tutar. `getProgramAccounts` sorgularında **`dataSize` süzgeci zorunludur**: `Proof` = 247, `Agreement` = 250, `Attestation` = 166, `Revocation` = 82.
 "Bir cüzdanın taraf olduğu sözleşmeler": 4 sorgu (ofsetler 85, 117, 149, 181), sonuçlar birleştirilir.
 
-### 3.6 Henüz yok
-`revoke`, `Identity` PDA.
+### 3.6 Hesaplar: `Attestation` ve `Revocation` (kimlik ve iptal)
+Mevcut hesapların düzeni değişmez; yeni hesap türleri eklenir (eski kayıtlar ve vektörler geçerli kalır).
+
+**`Attestation`** (PDA): bir yayıncının (issuer) bir cüzdan (subject) için "bu cüzdan şu kişidir" beyanı. Seeds: `[b"attest", issuer, subject]`.
+
+| Alan | Tür | Ofset |
+|---|---|---|
+| (Anchor discriminator) | 8 bayt = sha256("account:Attestation")[..8] = `987db75624927949` | 0 |
+| version | u8 (= 1) | 8 |
+| issuer | Pubkey | **9** |
+| subject | Pubkey | **41** |
+| label | String (u32 uzunluk + UTF-8, **1-32 bayt**) | 73 |
+| claim_hash | [u8; 32], zincir dışı kanıtın SHA-256'sı | label'dan sonra |
+| created_at | i64 | |
+| expires_at | i64, 0 = süresiz | |
+| revoked_at | i64, 0 = geçerli | |
+| bump | u8 | |
+
+Hesap 166 bayt ayrılır. `label` değişken uzunlukludur; sabit ofsetler yalnızca `issuer` (9) ve `subject` (41) içindir.
+
+- `attest_identity(subject: Pubkey, label: String, claim_hash: [u8;32], expires_at: i64)`, discriminator `a8174380d1da5856`.
+  Hesaplar: `issuer` (Signer), `payer` (Signer, mut), `attestation` (PDA, init_if_needed), `system_program`.
+  `issuer == subject` ise kişinin **kendi beyanıdır** (kayıt); aksi halde üçüncü taraf onayıdır. Aynı `(issuer, subject)` için tekrar çağrı beyanı **yeniler** (son beyan geçerlidir; iptal edilmişse yeniden etkinleşir).
+  Hatalar: `BadLabel` (boş ya da 32 bayttan uzun), `BadExpiry` (0 değil ve geçmişte).
+- `revoke_attestation()`, discriminator `0c9c67a1c2f6d3b3`. Hesaplar: `issuer` (Signer), `attestation` (mut). Yalnızca beyanı veren yayıncı. Hatalar: `NotTheIssuer`, `AlreadyRevoked`.
+
+**`Revocation`** (PDA): imzalayanın kendi kaydını geçersiz kılması. Seeds: `[b"revoke", proof_pda]`. Alanlar: discriminator (`807581e50b9f4fea`), version u8, proof Pubkey, signer Pubkey, revoked_at i64, bump u8; 82 bayt. `Proof` hesabına dokunulmaz, zincirde kalır.
+- `revoke_proof()`, discriminator `3b75d2754b186475`. Hesaplar: `signer` (Signer), `payer` (Signer, mut), `proof`, `revocation` (PDA, init), `system_program`.
+  Yalnızca kaydı oluşturan imzalayan (`NotTheSigner`). İkinci kez iptal edilemez (`init` "account already in use").
+- Sözleşmeler (`Agreement`) için iptal **yoktur**.
+
+Olaylar: `IdentityAttested`, `AttestationRevoked`, `ProofRevoked`.
+
+### 3.7 Henüz yok
+Sözleşme iptali, yayıncıyı zincirde yetkilendiren bir kayıt defteri (güven listesi şimdilik istemci tarafındadır, §4a), indeksleyici.
 
 ## 4. Doğrulama algoritması (API'siz)
 1. `hash = sha256(dosya)`.
@@ -86,9 +119,24 @@ Hesap **250** bayt ayrılır.
 4. Sonuç:
    - `VERIFIED`: `Proof` var ve hash eşit, ya da `Agreement` var, hash eşit ve **tüm taraflar imzalamış**.
    - `PENDING`: `Agreement` var, hash eşit, ama tüm taraflar henüz imzalamamış (yanıtta `agreement`).
+   - `REVOKED`: `Proof` var ve hash eşit, ama `[revoke, proof_pda]` hesabı var (imzalayan iptal etmiş; yanıtta `revocation`). Hash eşit değilse `INVALID` önceliklidir.
    - `INVALID`: adres verildi ama kayıtlı hash ≠ hesaplanan hash (dosya değişmiş).
    - `NOT_FOUND`: hesap yok.
-5. Çıktı: `{status, original_hash, received_hash, proof_pda, proof | agreement}`.
+5. Çıktı: `{status, original_hash, received_hash, proof_pda, proof | agreement, revocation?, identity?}`.
+6. Bağımsız doğrulayıcının (`agents/verify_standalone.py`) çıkış kodu: 0 VERIFIED, 1 INVALID, 2 NOT_FOUND, 3 REVOKED, 4 PENDING.
+
+## 4a. İmzalayanın kimliği (eIDAS'taki güven katmanının karşılığı)
+Bir cüzdan adresi kimlik değildir. Kimlik, bir **yayıncının beyanıdır** (§3.6). Doğrulayıcı, imzalayan (`Proof.signer`; sözleşmede her taraf) için şunu yapar:
+1. `getProgramAccounts(PROGRAM_ID, dataSize=166, memcmp{offset:41, bytes: subject})` ile `subject` hakkındaki tüm beyanları oku.
+2. Her beyanın durumu: `revoked` (`revoked_at != 0`), `expired` (`expires_at != 0` ve `expires_at <= şimdi`), aksi halde `valid`. İptal, süre dolmasından önce gelir. Yalnızca `valid` beyanlar sayılır.
+3. **Güven listesi:** doğrulayıcının güvendiği yayıncı public key'leri. Referans listesi `docs/trusted_issuers.json` (eIDAS'taki Trusted List'in karşılığı); herkes kendi listesini kullanabilir. Yayıncı beyanı, kendi cüzdanı hakkında verdiği beyan (`issuer == subject`) **asla** güvenilir sayılmaz.
+4. Düzey (öncelik sırasıyla):
+   - `trusted`: güven listesindeki bir yayıncıdan, `issuer != subject`, geçerli beyan.
+   - `unrecognized_issuer`: geçerli beyan var, yayıncı listede yok.
+   - `self_declared`: yalnızca kişinin kendi beyanı (`issuer == subject`).
+   - `none`: geçerli beyan yok (yalnızca cüzdan adresi bilinir).
+5. Arayüz ve araçlar yalnızca `trusted` için "kimlik onaylı" der. Kişisel veri zincire yazılmaz: `label` kişinin ya da yayıncının seçtiği görünen addır, kanıt yalnızca hash olarak (`claim_hash`) durur.
+6. Kimlik sorgusu tamamlayıcıdır; başarısız olursa doğrulama sonucu (`status`) etkilenmez, yanıta `identity_error` eklenir.
 
 ## 5. Doğrulama sertifikası (JSON; QR ve PDF'in kaynağı)
 ```json
@@ -104,9 +152,11 @@ Hesap **250** bayt ayrılır.
   "created_at": "2026-10-03T18:30:00Z",
   "tx_signature": "<base58>",
   "explorer_url": "https://explorer.solana.com/address/<proof_pda>?cluster=devnet",
-  "verify_url": "https://<frontend>/?tab=verify&pda=<proof_pda>"
+  "verify_url": "https://<frontend>/?tab=verify&pda=<proof_pda>",
+  "how_to_verify": { "spec": "CONTRACT.md section 4", "steps": ["..."], "cli": "python agents/verify_standalone.py <file> --pda <proof_pda> --program <PROGRAM_ID> --rpc <rpc>" }
 }
 ```
+Sertifika tek başına bir şey kanıtlamaz: zincirdeki hesaba işaret eder. `how_to_verify` herkesin bağımsız doğrulaması için adımları ve komutu taşır. İmzalayanın kimliği sertifikaya **yazılmaz** (zamanla değişebilir: iptal, süre dolumu); doğrulayıcı onu canlı olarak çözer (§4a).
 Sözleşme sertifikası: `version: "notary.agreement.v1"`, `agreement_pda`, `creator`, `parties: [{signer, signed_at}]`, `signed_count`, `complete`; diğer alanlar aynı.
 PDF sertifika aynı nesneden istemcide üretilir ve hukuki notu taşır.
 
@@ -118,9 +168,9 @@ PDF sertifika aynı nesneden istemcide üretilir ve hukuki notu taşır.
 - `GET /health`
 - `GET /relay/info` → `{enabled, program_id, relayer_pubkey, cluster, balance_lamports, low_balance}`.
   Bakiye `RELAY_MIN_LAMPORTS` (varsayılan 0.01 SOL) altına inerse `enabled: false`.
-- `POST /relay`, gövde `{tx_base64}` → `{tx_signature, proof_pda, account, kind, explorer_url}` (`proof_pda` = `account`, geriye uyumluluk; `kind` = `notarize | create_agreement | co_sign`).
-  - İstemci işlemi `fee payer = relayer_pubkey` ile kurar, `payer` hesabı da relayer'dır (`co_sign`'da payer hesabı yoktur), `signer` imzalar.
-  - Relayer yalnızca tek talimatlı, hedefi `PROGRAM_ID` olan, `notarize | create_agreement | co_sign` işlemlerini imzalar; `signer` relayer olamaz; imza geçerli olmalıdır.
+- `POST /relay`, gövde `{tx_base64}` → `{tx_signature, proof_pda, account, kind, explorer_url}` (`proof_pda` = `account`, geriye uyumluluk; `kind` = `notarize | create_agreement | co_sign | attest_identity | revoke_attestation | revoke_proof`).
+  - İstemci işlemi `fee payer = relayer_pubkey` ile kurar, `payer` hesabı da relayer'dır (`co_sign` ve `revoke_attestation`'da payer hesabı yoktur), `signer` imzalar. Hesap sayıları: `notarize`, `create_agreement`, `attest_identity` 4; `revoke_proof` 5 (hedef = `revocation`); `co_sign`, `revoke_attestation` 2.
+  - Relayer yalnızca tek talimatlı, hedefi `PROGRAM_ID` olan, `notarize | create_agreement | co_sign | attest_identity | revoke_attestation | revoke_proof` işlemlerini imzalar; `signer` relayer olamaz; imza geçerli olmalıdır.
   - Hız sınırı IP başına dakikada `RELAY_RATE_LIMIT`; çok örnekli ortamda `UPSTASH_REDIS_REST_*` ile ortak sayaç. Hatalar: 400 (kural), 409 (zincirde başarısız), 429, 502 (RPC), 503 (kapalı ya da bakiye bitti).
 - Planlanan, **henüz yok**: `GET /proofs?signer=` (indeksleyici), `POST /certificate` (sunucu tarafı PDF).
 
@@ -130,11 +180,14 @@ PDF sertifika aynı nesneden istemcide üretilir ve hukuki notu taşır.
 - Test program ID (yalnızca vektör için; seed `0x07 × 32`): `GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB`
 - Dosya `Notary Test Vector Document v1` → hash `055e95ec4e2aa4543afa1569901d08fff259d0deb8e81cea80b434b4aa601d27`
 - Beklenen `proof_pda = BQmtqeNo2zJmpAKyj9b1ddGgMLPwMDaX62JHCH9e3fV2`, `bump = 252`
-- `golden` ve `agreement` bölümleri: talimat verisi ve hesap baytları (hex), discriminator'lar, boyutlar, ofsetler.
+- `golden`, `agreement`, `identity` ve `revocation` bölümleri: talimat verisi ve hesap baytları (hex), discriminator'lar, PDA'lar, boyutlar, ofsetler. Üretici: `agents/gen_test_vectors_v2.py` (Python); Rust (`cd program && cargo test`) ve TypeScript (`cd frontend && npm test`) aynı baytları bağımsız olarak üretir/çözer.
+- `docs/test_vectors_v2.json` yeniden üretilirse üç dilin testleri de geçmelidir; biri geçmezse düzen sözleşmeden sapmıştır.
 
 ## 9. Dağıtım
-- Devnet program kimliği: `docs/deployment.json` (`7HCpWChK9pXXAsUzAvA8zq3pi6EwuaUJnkk8XqMn1swN`).
-- **Önemli:** devnet'te canlı sürüm yalnızca `notarize` içerir. `create_agreement` / `co_sign` (§3.3-3.4) kodda ve yerel doğrulayıcıda sınandı, devnet'e **yükseltme (upgrade) ile** alınmalıdır (`scripts/deploy-devnet.sh`, upgrade authority sahibi deployer anahtarı gerekir). O zamana kadar canlı sitede sözleşme akışı çalışmaz.
+- Devnet program kimliği ve ikilinin SHA-256'sı: `docs/deployment.json`. `scripts/check-deployed.sh` zincirdeki ikiliyle bu kaydı karşılaştırır (anahtar gerekmez).
+- Devnet'teki canlı sürüm (2026-10-09) `notarize`, `create_agreement` ve `co_sign` içerir. `attest_identity`, `revoke_attestation` ve `revoke_proof` (§3.6) kodda, yerel doğrulayıcıda ve CI'da sınanır; devnet'e **yükseltme ile** alınmalıdır (`scripts/deploy-devnet.sh`, upgrade authority sahibi deployer anahtarı gerekir). O zamana kadar canlıda kimlik ve iptal çağrıları reddedilir (doğrulama yine çalışır: kimlik `none` görünür).
+- IDL: `program/idl/notary.json` (`python3 scripts/build-idl.py`; Anchor CLI gerekmez, CI güncel olup olmadığını denetler).
+- Kaynak ile ikilinin eşleştirilmesi: `scripts/verify-program.sh` (`solana-verify`, Docker). Henüz çalıştırılmadı; yalnızca doğrulanabilir derlemeyle yayınlanan program eşleşir.
 - Relayer: `scripts/deploy-relay.sh` ile Vercel'e durumsuz fonksiyon olarak.
 
 ## 10. Kararlar
@@ -142,3 +195,6 @@ PDF sertifika aynı nesneden istemcide üretilir ve hukuki notu taşır.
 2. Ücret ve kira: imzalayan öder; ya da isteğe bağlı relayer (§7).
 3. Hukuki ifade: "cüzdana bağlı, zaman damgalı bütünlük kanıtı". eIDAS nitelikli e-imzaya eşdeğer değildir; imzalayanın kimliğini tek başına kanıtlamaz. Bu not arayüzde, JSON ve PDF sertifikalarda yer alır.
 4. Sözleşmede oluşturan taraf `signers` içinde olmak zorundadır ve oluştururken imzalamış sayılır; böylece "kimse imzalamamış" sözleşme oluşmaz.
+5. Kimlik, cüzdan adresinin kendisinden değil, yayıncı beyanından gelir (§4a). Kendi kendine verilen ad "self_declared" olarak gösterilir, asla "onaylı" değil. Güven listesi istemci tarafındadır: zincir kimin güvenilir olduğuna karar vermez, doğrulayıcı karar verir.
+6. İptal, kaydı silmez: yanına bir `Revocation` hesabı açılır. Zincirde hiçbir şey geri alınamaz; iptal de herkese açıktır ve geri alınamaz.
+7. Lisans: MIT (`LICENSE`).

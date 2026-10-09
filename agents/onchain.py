@@ -347,7 +347,7 @@ class Rpc:
 
 # --------------------------------------------------------------------- işlemler
 def notarize(rpc, signer: Keypair, document_hash: bytes, receiver=None, parents=(), program_id=None, payer: Keypair = None):
-    """Belge hash'ini signer adına PDA olarak kaydeder. payer verilmezse signer öder.
+    """Belge hash'ini signer adına PDA olarak kaydeder. payer verilmezse signer öder; `payer=RelayPayer(url)` ile ücreti relayer öder.
     -> {proof_pda, tx_signature, signer, document_hash}"""
     program_id = program_id or PROGRAM_ID
     if not program_id:
@@ -364,11 +364,7 @@ def notarize(rpc, signer: Keypair, document_hash: bytes, receiver=None, parents=
             AccountMeta(SYSTEM_PROGRAM_ID, False, False),
         ],
     )
-    blockhash = rpc.latest_blockhash()
-    msg = Message.new_with_blockhash([ix], payer.pubkey(), blockhash)
-    keypairs = [payer] if signer.pubkey() == payer.pubkey() else [payer, signer]
-    sig = rpc.send(Transaction(keypairs, msg, blockhash))
-    rpc.confirm(sig)
+    sig = _send_ix(rpc, ix, [signer], payer)  # payer bir RelayPayer olabilir
     return {"proof_pda": str(pda), "tx_signature": sig, "signer": str(signer.pubkey()), "document_hash": document_hash.hex()}
 
 
@@ -430,7 +426,39 @@ def list_agreements_for(rpc, party, program_id=None):
     return out
 
 
+class RelayPayer:
+    """Ücreti backend relayer'ı öder (kullanıcının SOL'ü gerekmez). `payer=RelayPayer(url)` olarak verilir; imzalayan yine kendisidir,
+    relayer yalnızca ücret imzasını ekler ve gönderir (backend/app/relay.py)."""
+
+    def __init__(self, url, timeout=30):
+        self.url, self.timeout = url.rstrip("/"), timeout
+        info = requests.get(f"{self.url}/relay/info", timeout=timeout).json()
+        if not info.get("enabled"):
+            raise ChainError("relayer kapalı ya da yapılandırılmamış")
+        if info.get("low_balance"):
+            raise ChainError("relayer bakiyesi yetersiz")
+        self._pubkey = Pubkey.from_string(info["relayer_pubkey"])
+
+    def pubkey(self):
+        return self._pubkey
+
+    def send(self, rpc, ix, signers):
+        blockhash = rpc.latest_blockhash()
+        tx = Transaction.new_unsigned(Message.new_with_blockhash([ix], self._pubkey, blockhash))
+        tx.partial_sign(list(signers), blockhash)
+        resp = requests.post(f"{self.url}/relay", json={"tx_base64": base64.b64encode(bytes(tx)).decode()}, timeout=self.timeout)
+        if not resp.ok:
+            try:
+                detail = resp.json().get("detail", resp.text)
+            except ValueError:
+                detail = resp.text
+            raise ChainError(f"relay: {detail}")
+        return resp.json()["tx_signature"]
+
+
 def _send_ix(rpc, ix, signers, payer):
+    if isinstance(payer, RelayPayer):
+        return payer.send(rpc, ix, signers)
     blockhash = rpc.latest_blockhash()
     msg = Message.new_with_blockhash([ix], payer.pubkey(), blockhash)
     uniq, seen = [], set()

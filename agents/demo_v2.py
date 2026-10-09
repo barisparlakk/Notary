@@ -36,7 +36,8 @@ def short(s, n=14):
 
 def panel(res, name, expected):
     ok = res["status"] == "VERIFIED"
-    color, mark = ("green", "✓ VERIFIED") if ok else (("red", "✗ INVALID") if res["status"] == "INVALID" else ("yellow", "? NOT_FOUND"))
+    marks = {"INVALID": ("red", "✗ INVALID"), "REVOKED": ("yellow", "⚠ REVOKED"), "PENDING": ("blue", "… PENDING")}
+    color, mark = ("green", "✓ VERIFIED") if ok else marks.get(res["status"], ("yellow", "? NOT_FOUND"))
     body = f"[bold]{name}[/]\nkayıtlı : {short(res['original_hash'] or '—')}\nalınan  : {short(res['received_hash'])}"
     if res.get("summary"):
         body += f"\n\n[italic]{escape(res['summary'])}[/]"
@@ -64,6 +65,7 @@ def main():
     ap.add_argument("--llm", action="store_true", help="agent'lar LLM function calling kullansın (bkz. llm.py)")
     ap.add_argument("--chain", action="store_true", help="Research -> Analysis -> Decision zincirini de çalıştır")
     ap.add_argument("--agreement", action="store_true", help="iki agent'ın birlikte imzaladığı sözleşme akışını da çalıştır")
+    ap.add_argument("--identity", action="store_true", help="kimlik beyanı (yayıncı onayı) ve kaydı iptal etme akışını da çalıştır")
     ap.add_argument("--delay", type=float, default=0.5)
     a = ap.parse_args()
 
@@ -85,7 +87,7 @@ def main():
     common = {"rpc": rpc, "program_id": program, "funder": funder, "log": log}
 
     console.print(Panel.fit("[bold]Notary v2[/] · zincir üstü kayıt, API'siz doğrulama", subtitle=f"{url} · {short(program, 6)}", border_style="blue"))
-    ok3 = ok4 = True
+    ok3 = ok4 = ok5 = True
     try:
         step(1, "agent_a: rapor üret ve zincire kaydet", a.delay)
         receiver_pk = onchain.agent_keypair(receiver_agent.RECEIVER_ID).pubkey()
@@ -135,13 +137,32 @@ def main():
             onchain.co_sign(rpc, b_kp, ag["agreement_pda"], program_id=program)
             done = onchain.verify(rpc, contract.read_bytes(), pda=ag["agreement_pda"], program_id=program)
             ok4 = panel(done, "contract.txt", "VERIFIED") and pending["status"] == "PENDING"
+        if a.identity:
+            step(7, "Kimlik: bir yayıncı agent_a'yı onaylar; sonra agent_a kaydını iptal eder", a.delay)
+            a_kp, issuer = onchain.agent_keypair(sender_agent.SENDER_ID), onchain.Keypair()
+            for kp in (a_kp, issuer):
+                onchain.ensure_funded(rpc, kp, funder)
+            trust = {str(issuer.pubkey()): {"pubkey": str(issuer.pubkey()), "label": "Demo Issuer"}}
+            report = out["file"].read_bytes()
+            before = onchain.verify(rpc, report, pda=cert["proof_pda"], program_id=program, trust=trust)
+            console.print(f"  onaydan önce  : kimlik [yellow]{before['identity']['level']}[/] (yalnızca cüzdan adresi)")
+            onchain.attest_identity(rpc, issuer, a_kp.pubkey(), "Agent A (Research)", b"demo identity check", program_id=program)
+            after = onchain.verify(rpc, report, pda=cert["proof_pda"], program_id=program, trust=trust)
+            console.print(f"  yayıncı onayladı: kimlik [green]{after['identity']['level']}[/] ({after['identity']['label']}, yayıncı: {after['identity']['best']['issuer_label']})")
+            untrusted = onchain.verify(rpc, report, pda=cert["proof_pda"], program_id=program, trust={})
+            console.print(f"  yayıncıya güvenmeyen doğrulayıcı: [yellow]{untrusted['identity']['level']}[/]")
+            onchain.revoke_proof(rpc, a_kp, cert["proof_pda"], program_id=program)
+            revoked = onchain.verify(rpc, report, pda=cert["proof_pda"], program_id=program, trust=trust)
+            panel(revoked, f"{out['file'].name} (imzalayan iptal etti)", "VERIFIED")
+            ok5 = (before["identity"]["level"] == "none" and after["identity"]["level"] == "trusted"
+                   and untrusted["identity"]["level"] == "unrecognized_issuer" and revoked["status"] == "REVOKED")
     finally:
         if server:
             server.shutdown()
 
-    passed = ok1 and ok2 and ok3 and ok4
+    passed = ok1 and ok2 and ok3 and ok4 and ok5
     console.print(Rule(style="green" if passed else "red"))
-    console.print("[bold green]Demo başarılı:[/] VERIFIED, 1 byte → INVALID" + (", provenance zincirden okundu" if a.chain else "") + (", sözleşme PENDING → VERIFIED" if a.agreement else "")
+    console.print("[bold green]Demo başarılı:[/] VERIFIED, 1 byte → INVALID" + (", provenance zincirden okundu" if a.chain else "") + (", sözleşme PENDING → VERIFIED" if a.agreement else "") + (", kimlik none → trusted, iptal → REVOKED" if a.identity else "")
                   + ". Backend kullanılmadı." if passed else "[bold red]Demo beklenmeyen sonuç verdi.[/]")
     return 0 if passed else 1
 

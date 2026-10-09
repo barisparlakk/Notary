@@ -165,3 +165,33 @@ def test_real_verify_reports_identity_and_revocation_together(rpc):
     res = onchain.verify(rpc, data, pda=out["proof_pda"], program_id=PROGRAM, trust=trust)
     assert res["status"] == "VERIFIED" and res["identity"]["level"] == "trusted" and res["identity"]["label"] == "Mehmet"
     assert "identity" not in onchain.verify(rpc, data, pda=out["proof_pda"], program_id=PROGRAM, identity=False)
+
+
+# ------------------------------------------------------------------ relayer ile (kullanıcının SOL'ü yok)
+RELAY = os.environ.get("NOTARY_TEST_RELAY")
+
+
+@pytest.mark.skipif(not RELAY, reason="NOTARY_TEST_RELAY tanımlı değil")
+def test_real_relay_pays_for_identity_notarize_and_revoke(rpc):
+    person, issuer = onchain.Keypair(), onchain.Keypair()  # ikisinin de bakiyesi sıfır
+    assert rpc.balance(person.pubkey()) == 0 and rpc.balance(issuer.pubkey()) == 0
+    payer = onchain.RelayPayer(RELAY)
+    trust = {str(issuer.pubkey()): {"pubkey": str(issuer.pubkey()), "label": "Relay Issuer"}}
+
+    onchain.attest_identity(rpc, person, person.pubkey(), "Mehmet", b"self", program_id=PROGRAM, payer=payer)
+    onchain.attest_identity(rpc, issuer, person.pubkey(), "Mehmet Demir", b"kyc", program_id=PROGRAM, payer=payer)
+    data = f"relayed {os.urandom(4).hex()}".encode()
+    out = onchain.notarize(rpc, person, onchain.sha256_bytes(data), program_id=PROGRAM, payer=payer)
+    res = onchain.verify(rpc, data, pda=out["proof_pda"], program_id=PROGRAM, trust=trust)
+    assert res["status"] == "VERIFIED" and res["identity"]["level"] == "trusted" and res["identity"]["label"] == "Mehmet Demir"
+
+    onchain.revoke_proof(rpc, person, out["proof_pda"], program_id=PROGRAM, payer=payer)
+    assert onchain.verify(rpc, data, pda=out["proof_pda"], program_id=PROGRAM, trust=trust)["status"] == "REVOKED"
+    onchain.revoke_attestation(rpc, issuer, person.pubkey(), program_id=PROGRAM, payer=payer)
+    assert onchain.resolve_identity(rpc, str(person.pubkey()), PROGRAM, trust)["level"] == "self_declared"
+    assert rpc.balance(person.pubkey()) == 0 and rpc.balance(issuer.pubkey()) == 0  # kullanıcılar hiç SOL harcamadı
+
+    with pytest.raises(onchain.ChainError):  # relayer yalnızca izinli talimatları imzalar: sistem transferi reddedilir
+        from solders.system_program import TransferParams, transfer
+        ix = transfer(TransferParams(from_pubkey=person.pubkey(), to_pubkey=issuer.pubkey(), lamports=1))
+        onchain._send_ix(rpc, ix, [person], payer)

@@ -19,6 +19,11 @@ Anlatılacak ana şey: bizim sunucumuz kapalıyken bile bir belgenin doğrulanab
 5. **Bir bayt değişirse**: Check sayfasında bir dosyayı bırakın, sonra bir bayt değiştirilmiş hâlini; kayıtlı mühür (yeşil) ile dosyanın mührü (kırmızı) yan yana çıkar ve çok farklı görünür. Sunucumuzu kapatmak (relayer sitesi) doğrulamayı etkilemez.
 6. **Açık kaynak doğrulayıcı**: `python agents/verify_standalone.py belge.pdf --pda <PDA> --program <ID>`
 7. **Provenance**: Check sonucunda "Based on" satırı, ya da Records > Inspect.
+8. **Kimlik**: Records > People > "Register your name" (kendi beyanı: Check sayfasında "Name declared by the signer, not independently confirmed"). Sonra yayıncı onaylar:
+   `python agents/issuer.py attest --keypair ~/.config/notary/demo-issuer.json --subject <CÜZDAN> --name "Ahmet Yilmaz" --evidence "kimlik kontrol kaydı" --days 365 --relay <relay>`.
+   Check sayfası "Identity confirmed ... attested by Notary Demo Issuer" gösterir. Yayıncıya güvenmeyen doğrulayıcı (`notary-verify ... --trust-list /yok.json`) aynı beyanı "unrecognized issuer" görür.
+9. **İptal**: Records > Details > "Revoke this record". Check sayfası amber mühür ve "the signer has withdrawn the record" gösterir (`notary-verify` çıkış kodu 3).
+10. **Terminalde hepsi**: `python agents/demo_v2.py --rpc <rpc> --program <id> --funder <fonlu.json> --chain --agreement --identity`.
 
 ## Plan B
 - Devnet yavaş ya da erişilemez: yerel `solana-test-validator` (kök README) ya da `demo_v2.py --mock`. `VITE_PROGRAM_ID` boşken arayüz
@@ -27,5 +32,6 @@ Anlatılacak ana şey: bizim sunucumuz kapalıyken bile bir belgenin doğrulanab
 
 ## Kontrol listesi
 - [ ] `solana program show <ID> --url devnet` programı gösteriyor
-- [ ] `curl <relay>/relay/info` → `enabled: true`
+- [ ] `curl <relay>/relay/info` → `enabled: true` ve yanıtta `balance_lamports` var (yoksa relayer eski kodla çalışıyor)
+- [ ] `scripts/check-deployed.sh` → EŞLEŞİYOR
 - [ ] `cd frontend && RPC_URL=<rpc> PROGRAM_ID=<id> RELAY_URL=<relay> FUNDER=<fonlu.json> npm run e2e:local` → hepsi geçti
