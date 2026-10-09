@@ -14,6 +14,7 @@ export default {
         verified: '#0F7B5F',
         altered: '#C2362F',
         pending: '#3057D5',
+        revoked: '#A15C07',
         // Gri ölçeği mürekkep tonundan türetildi; mevcut ekranlar kendiliğinden bu soğuk tona geçer.
         // gray-500 (#5F6678) paper ve beyaz üzerinde >= 5:1; gray-400 metin için kullanılmaz.
         gray: {

@@ -8,6 +8,7 @@ export const SEAL_INK = {
   altered: '#C2362F',
   pending: '#3057D5',
   neutral: '#5F6678',
+  revoked: '#A15C07',
 };
 
 const HEX64 = /^[0-9a-f]{64}$/i;

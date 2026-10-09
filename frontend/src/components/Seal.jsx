@@ -6,6 +6,7 @@ const LABELS = {
   altered: 'Seal of the file you checked, which differs from the record',
   pending: 'Seal of the agreed file, waiting for signatures',
   neutral: 'Seal of the file you checked',
+  revoked: 'Seal of the recorded file, which the signer has withdrawn',
 };
 
 /**

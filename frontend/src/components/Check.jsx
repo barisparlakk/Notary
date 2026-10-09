@@ -7,6 +7,8 @@ import { useNotary, shortKey } from '../lib/notary';
 import { buildAgreementCertificate, buildCertificate, lineage, sha256Hex, verifyDocument } from '../lib/chain';
 import { downloadCertificatePdf } from '../lib/certificatePdf';
 import { getMeta, setMeta } from '../lib/localMeta';
+import IdentityNote from './Identity';
+import { TRUSTED_ISSUERS } from '../lib/trust';
 
 const SAMPLE = `Notary sample contract
 Parties: A and B
@@ -16,6 +18,7 @@ Date: 2026-10-03`;
 const STATEMENT = {
   VERIFIED: { title: 'This is the file that was recorded.', seal: 'verified' },
   PENDING: { title: 'This is the agreed file. Not everyone has signed yet.', seal: 'pending' },
+  REVOKED: { title: 'This is the recorded file, but the signer has withdrawn the record.', seal: 'revoked' },
   INVALID: { title: 'This is not the file that was recorded.', seal: 'altered' },
   NOT_FOUND: { title: 'No record of this exact file.', seal: 'neutral' },
 };
@@ -49,7 +52,7 @@ export default function Check({ initialPda = '' }) {
       const r = (ref || '').trim();
       let opts = {};
       if (r) opts = (await chain.getRecord(r).catch(() => null)) ? { pda: r } : { signer: r };
-      const res = await verifyDocument(chain, fileHash, opts);
+      const res = await verifyDocument(chain, fileHash, { ...opts, trust: TRUSTED_ISSUERS });
       setResult(res);
       if (res.proof_pda && res.proof) lineage(chain, res.proof_pda).then(setAncestors).catch(() => setAncestors([]));
     } catch (err) {
@@ -189,6 +192,7 @@ export default function Check({ initialPda = '' }) {
             <p className="mt-3 text-gray-600 max-w-xl leading-relaxed">
               {status === 'VERIFIED' && <>It matches the record below, byte for byte.</>}
               {status === 'PENDING' && <>{result.agreement.signed_count} of {result.agreement.parties.length} parties have signed. It is binding once all of them have.</>}
+              {status === 'REVOKED' && <>The wallet that recorded it revoked the record on {result.revocation.revoked_at_iso}. The file matches, but do not rely on the record.</>}
               {status === 'INVALID' && <>It differs from the record in at least one byte. A single changed byte gives a completely different seal.</>}
               {status === 'NOT_FOUND' && <>It was never recorded, or it was changed after it was. If you have the address of a record, add it above and check again.</>}
             </p>
@@ -210,6 +214,7 @@ export default function Check({ initialPda = '' }) {
               <dl className="mt-8">
                 {recordedBy && <Row label="Recorded by"><span className="font-mono text-xs">{recordedBy}</span> <Copy2 text={recordedBy} /></Row>}
                 {recordedAt && <Row label="Recorded on">{recordedAt} (chain time, UTC)</Row>}
+                {result.proof && <Row label="Signer identity">{result.identity ? <IdentityNote identity={result.identity} /> : <span className="text-gray-500">Identity could not be looked up.</span>}</Row>}
                 {result.proof?.receiver && <Row label="Receiver"><span className="font-mono text-xs">{result.proof.receiver}</span></Row>}
                 <Row label="Record address">
                   <span className="font-mono text-xs">{result.proof_pda}</span> <Copy2 text={result.proof_pda} />
@@ -222,7 +227,10 @@ export default function Check({ initialPda = '' }) {
                     <ul>
                       {result.agreement.parties.map((p) => (
                         <li key={p.signer} className="flex justify-between gap-4 border-b border-dashed border-rule py-2 last:border-b-0">
-                          <span className="font-mono text-xs" title={p.signer}>{shortKey(p.signer, 8)}{p.signer === result.agreement.creator ? ' (created it)' : ''}</span>
+                          <span className="min-w-0">
+                            <span className="font-mono text-xs" title={p.signer}>{shortKey(p.signer, 8)}{p.signer === result.agreement.creator ? ' (created it)' : ''}</span>
+                            {p.identity && <span className="block text-xs"><IdentityNote identity={p.identity} compact /></span>}
+                          </span>
                           <span className={p.signed_at ? 'text-verified' : 'text-gray-500'}>{p.signed_at ? `Signed ${p.signed_at_iso}` : 'Waiting for signature'}</span>
                         </li>
                       ))}

@@ -119,6 +119,19 @@ export async function buildCertificatePdf(certificate) {
   doc.text('No account or server of ours is needed.', left, y + 18);
   y += 124;
 
+  // Sertifika tek başına bir şey kanıtlamaz; herkes zincirden bağımsız doğrulayabilir.
+  if (certificate.how_to_verify) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(17, 24, 39);
+    doc.text('Verify it yourself', left, y); y += 13;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100, 116, 139);
+    const steps = certificate.how_to_verify.steps.map((s, i) => `${i + 1}. ${s}`);
+    for (const line of wrap(doc, steps.join('\n'), width)) { doc.text(line, left, y); y += 10; }
+    doc.setFont('courier', 'normal');
+    const cli = wrap(doc, certificate.how_to_verify.cli, width);
+    for (const line of cli) { doc.text(line, left, y + 4); y += 10; }
+    y += 14;
+  }
+
   doc.setDrawColor(229, 231, 235); doc.line(left, y, left + width, y); y += 16;
   doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100, 116, 139);
   doc.text(wrap(doc, LEGAL_NOTICE, width), left, y);
