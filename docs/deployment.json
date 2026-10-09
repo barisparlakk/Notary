@@ -3,8 +3,8 @@
   "program_id": "7HCpWChK9pXXAsUzAvA8zq3pi6EwuaUJnkk8XqMn1swN",
   "upgrade_authority": "2L7nCSdxDfzxPqu39FbTXbJoXzLqotzAaaUmAQHBFKSU",
   "rpc": "https://api.devnet.solana.com",
-  "so_sha256": "01e674fbb213496fe8765afa0557d5950ff52db471fef9c75a823771588abf73",
+  "so_sha256": "7c19d440b81e398a62a2ff2f739e46fbb75d2be679e6d64ead21ca8775d6da15",
   "toolchain": "agave 4.3.0, anchor-lang 1.2.0",
-  "deployed_at": "2026-10-09T22:23:29Z",
+  "deployed_at": "2026-10-09T22:49:35Z",
   "explorer_url": "https://explorer.solana.com/address/7HCpWChK9pXXAsUzAvA8zq3pi6EwuaUJnkk8XqMn1swN?cluster=devnet"
 }
