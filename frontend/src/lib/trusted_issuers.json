@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "note": "Güven listesi (eIDAS'taki Trusted List'in karşılığı). Yalnızca burada listelenen yayıncıların kimlik beyanı 'trusted' sayılır; listede olmayan yayıncının beyanı 'tanınmayan yayıncı' olarak gösterilir. Herkes kendi listesini kullanabilir: agents/verify_standalone.py --trust-list <dosya> ya da --trust <pubkey>. Frontend'de ek yayıncılar VITE_TRUSTED_ISSUERS (virgülle ayrılmış public key) ile verilir.",
+  "issuers": [
+    {
+      "pubkey": "4RqeS6C73tfMavrPi2jYJKXPh7sZtv6A1dLQ2RCvfPbp",
+      "label": "Notary Demo Issuer",
+      "note": "Yalnızca demo/hackathon içindir: beyanları gerçek bir kimlik doğrulamasına dayanmaz. Gerçek kullanımda kendi yayıncınızı ekleyin."
+    }
+  ]
+}

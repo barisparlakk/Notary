@@ -423,3 +423,9 @@ test('sertifika kendi kendini açıklar: nasıl doğrulanır', () => {
   assert.ok(c.how_to_verify.steps.some((s) => s.includes('REVOKED')));
   assert.match(c.notice, /attestations by issuers you choose to trust/);
 });
+
+test('güven listesi kopyası docs/trusted_issuers.json ile aynı (Vercel yalnızca frontend/ yükler)', () => {
+  const canonical = readFileSync(new URL('../../docs/trusted_issuers.json', import.meta.url), 'utf8');
+  const copy = readFileSync(new URL('../src/lib/trusted_issuers.json', import.meta.url), 'utf8');
+  assert.equal(copy, canonical, 'docs/trusted_issuers.json değişti: cp docs/trusted_issuers.json frontend/src/lib/');
+});
