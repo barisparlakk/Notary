@@ -345,3 +345,48 @@ def test_identity_and_revocation_instructions_reject_abuse(client):
     as_relayer = Instruction(PROGRAM, REVOKE_ATT_DISC, [AccountMeta(RELAYER.pubkey(), True, False), AccountMeta(Keypair().pubkey(), False, True)])
     tx = Transaction.new_unsigned(Message.new_with_blockhash([as_relayer], RELAYER.pubkey(), Hash.new_unique()))
     assert post(client, tx).status_code == 400  # relayer imzalayan olamaz
+
+
+# ---------------------------------------------------------------- RPC hız sınırında yeniden deneme
+REAL_RPC = relay._rpc  # `env` fixture'ı testlerde relay._rpc'yi değiştirir; gerçek işlevi modül yüklenirken sakla
+LIMITED = {"jsonrpc": "2.0", "error": {"code": 429, "message": "Too many requests for a specific RPC call"}}
+
+
+def run_real_rpc(monkeypatch, responses):
+    import asyncio
+    import httpx
+
+    calls = {"n": 0}
+
+    def handler(request):
+        status, body = responses[min(calls["n"], len(responses) - 1)]
+        calls["n"] += 1
+        return httpx.Response(status, json=body)
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(relay.httpx, "AsyncClient", lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw))
+
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(relay.asyncio, "sleep", no_sleep)
+    return calls, lambda: asyncio.run(REAL_RPC("getBalance", ["x"]))
+
+
+def test_rpc_retries_on_rate_limit_then_succeeds(monkeypatch):
+    calls, run = run_real_rpc(monkeypatch, [(429, LIMITED), (200, LIMITED), (200, {"jsonrpc": "2.0", "result": {"value": 7}})])
+    assert run() == {"value": 7} and calls["n"] == 3
+
+
+def test_rpc_gives_up_after_bounded_attempts(monkeypatch):
+    calls, run = run_real_rpc(monkeypatch, [(429, LIMITED)])
+    with pytest.raises(RuntimeError, match="Too many requests"):
+        run()
+    assert calls["n"] == relay.RPC_ATTEMPTS
+
+
+def test_rpc_does_not_retry_instruction_errors(monkeypatch):
+    calls, run = run_real_rpc(monkeypatch, [(200, {"jsonrpc": "2.0", "error": {"code": -32002, "message": "Transaction simulation failed"}})])
+    with pytest.raises(RuntimeError, match="simulation failed"):
+        run()
+    assert calls["n"] == 1

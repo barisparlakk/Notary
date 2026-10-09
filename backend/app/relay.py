@@ -86,13 +86,32 @@ async def _rate_limit(client: str) -> None:
     q.append(now)
 
 
+RPC_ATTEMPTS = 5
+
+
+def _rate_limited(resp: httpx.Response, body: dict | None) -> bool:
+    msg = str((body or {}).get("error", {}).get("message", "")) if isinstance(body, dict) else ""
+    return resp.status_code in (429, 502, 503, 504) or "too many requests" in msg.lower()
+
+
 async def _rpc(method: str, params: list):
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(DEVNET_RPC, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
-    body = resp.json()
-    if "error" in body:
-        raise RuntimeError(body["error"].get("message", str(body["error"])))
-    return body["result"]
+    """Solana JSON-RPC. Genel RPC'ler (api.devnet.solana.com) hızlı sorguda 429 döner: üstel geri çekilmeyle yeniden dener.
+    Yalnızca hız sınırı ve geçici sunucu hatalarında yeniden denenir; talimat hataları (ör. simülasyon) hemen iletilir."""
+    for attempt in range(RPC_ATTEMPTS):
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(DEVNET_RPC, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+        try:
+            body = resp.json()
+        except ValueError:
+            body = None
+        if _rate_limited(resp, body) and attempt < RPC_ATTEMPTS - 1:
+            await asyncio.sleep(min(2**attempt, 8) * 0.5)
+            continue
+        if body is None:
+            raise RuntimeError(f"RPC returned HTTP {resp.status_code} without JSON")
+        if "error" in body:
+            raise RuntimeError(body["error"].get("message", str(body["error"])))
+        return body["result"]
 
 
 class RelayRequest(BaseModel):
