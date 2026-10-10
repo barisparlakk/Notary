@@ -4,8 +4,8 @@ Kod `integration` dalında. Çalışma klasörünü iCloud dışında tutun (Des
 Anahtarlar (deployer, program, relayer) repoda yok; Barış'tan şifreli paket olarak alın.
 
 ## Şu an çalışan
-- Program devnet'te: `7HCpWChK9pXXAsUzAvA8zq3pi6EwuaUJnkk8XqMn1swN` (`docs/deployment.json`). 2026-10-09 yükseltmesi `notarize`, `create_agreement` ve `co_sign` içerir
-  (`scripts/check-deployed.sh` zincirdeki ikiliyi kayıtla karşılaştırır). Kimlik ve iptal talimatları (`attest_identity`, `revoke_attestation`, `revoke_proof`) kodda ve yerel doğrulayıcıda sınandı, **devnet'e henüz yüklenmedi**.
+- Program devnet'te: `7HCpWChK9pXXAsUzAvA8zq3pi6EwuaUJnkk8XqMn1swN` (`docs/deployment.json`). 2026-10-10 yükseltmesi altı talimatın hepsini içerir
+  (`notarize`, `create_agreement`, `co_sign`, `attest_identity`, `revoke_attestation`, `revoke_proof`); `scripts/check-deployed.sh` zincirdeki ikiliyi kayıtla karşılaştırır ve eşleşir.
 - Frontend gerçek modda: https://frontend-zeta-three-88.vercel.app. Relayer: https://notary-relay.vercel.app.
 - Çok imzalı sözleşme (`create_agreement`, `co_sign`), PDF sertifika, n8n servisi, relayer bakiye koruması kodda ve test edilmiş durumda;
   yerel `solana-test-validator` üzerinde program, agents, frontend ve relay uçtan uca geçti.

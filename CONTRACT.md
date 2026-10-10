@@ -123,7 +123,7 @@ Sözleşme iptali, yayıncıyı zincirde yetkilendiren bir kayıt defteri (güve
    - `INVALID`: adres verildi ama kayıtlı hash ≠ hesaplanan hash (dosya değişmiş).
    - `NOT_FOUND`: hesap yok.
 5. Çıktı: `{status, original_hash, received_hash, proof_pda, proof | agreement, revocation?, identity?}`.
-6. Bağımsız doğrulayıcının (`agents/verify_standalone.py`) çıkış kodu: 0 VERIFIED, 1 INVALID, 2 NOT_FOUND, 3 REVOKED, 4 PENDING.
+6. Bağımsız doğrulayıcının (`agents/verify_standalone.py`; pip paketi `notary-verify`, komut `notary-verify`) çıkış kodu: 0 VERIFIED, 1 INVALID, 2 NOT_FOUND, 3 REVOKED, 4 PENDING.
 
 ## 4a. İmzalayanın kimliği (eIDAS'taki güven katmanının karşılığı)
 Bir cüzdan adresi kimlik değildir. Kimlik, bir **yayıncının beyanıdır** (§3.6). Doğrulayıcı, imzalayan (`Proof.signer`; sözleşmede her taraf) için şunu yapar:
@@ -170,8 +170,9 @@ PDF sertifika aynı nesneden istemcide üretilir ve hukuki notu taşır.
   Bakiye `RELAY_MIN_LAMPORTS` (varsayılan 0.01 SOL) altına inerse `enabled: false`.
 - `POST /relay`, gövde `{tx_base64}` → `{tx_signature, proof_pda, account, kind, explorer_url}` (`proof_pda` = `account`, geriye uyumluluk; `kind` = `notarize | create_agreement | co_sign | attest_identity | revoke_attestation | revoke_proof`).
   - İstemci işlemi `fee payer = relayer_pubkey` ile kurar, `payer` hesabı da relayer'dır (`co_sign` ve `revoke_attestation`'da payer hesabı yoktur), `signer` imzalar. Hesap sayıları: `notarize`, `create_agreement`, `attest_identity` 4; `revoke_proof` 5 (hedef = `revocation`); `co_sign`, `revoke_attestation` 2.
-  - Relayer yalnızca tek talimatlı, hedefi `PROGRAM_ID` olan, `notarize | create_agreement | co_sign | attest_identity | revoke_attestation | revoke_proof` işlemlerini imzalar; `signer` relayer olamaz; imza geçerli olmalıdır.
-  - Hız sınırı IP başına dakikada `RELAY_RATE_LIMIT`; çok örnekli ortamda `UPSTASH_REDIS_REST_*` ile ortak sayaç. Hatalar: 400 (kural), 409 (zincirde başarısız), 429, 502 (RPC), 503 (kapalı ya da bakiye bitti).
+  - Relayer yalnızca tam olarak bir Notary talimatı taşıyan, hedefi `PROGRAM_ID` olan, `notarize | create_agreement | co_sign | attest_identity | revoke_attestation | revoke_proof` işlemlerini imzalar. İşlemde tam iki imzalayan olur: relayer (fee payer) ve `signer`; `signer` relayer olamaz; imza geçerli olmalıdır.
+  - Cüzdanların (ör. Phantom) kendiliğinden eklediği öncelik ücreti talimatları kabul edilir: `ComputeBudget` programından en fazla bir `SetComputeUnitLimit` ve bir `SetComputeUnitPrice`, hesapsız. Relayer'ın ödeyeceği öncelik ücreti (`price × limit / 10⁶`, limit verilmezse 200 000) `RELAY_MAX_PRIORITY_LAMPORTS`'u (varsayılan 250 000 lamport) aşarsa 400. Başka ek talimata izin verilmez.
+  - Hız sınırı IP başına dakikada `RELAY_RATE_LIMIT`; çok örnekli ortamda `UPSTASH_REDIS_REST_*` ile ortak sayaç. RPC'nin hız sınırı ve geçici hataları geri çekilmeli olarak yeniden denenir. Hatalar: 400 (kural), 409 (zincirde başarısız), 429, 502 (RPC, yeniden denemelerden sonra), 503 (kapalı ya da bakiye bitti).
 - Planlanan, **henüz yok**: `GET /proofs?signer=` (indeksleyici), `POST /certificate` (sunucu tarafı PDF).
 
 ## 8. Test vektörleri
@@ -185,7 +186,7 @@ PDF sertifika aynı nesneden istemcide üretilir ve hukuki notu taşır.
 
 ## 9. Dağıtım
 - Devnet program kimliği ve ikilinin SHA-256'sı: `docs/deployment.json`. `scripts/check-deployed.sh` zincirdeki ikiliyle bu kaydı karşılaştırır (anahtar gerekmez).
-- Devnet'teki canlı sürüm (2026-10-09) `notarize`, `create_agreement` ve `co_sign` içerir. `attest_identity`, `revoke_attestation` ve `revoke_proof` (§3.6) kodda, yerel doğrulayıcıda ve CI'da sınanır; devnet'e **yükseltme ile** alınmalıdır (`scripts/deploy-devnet.sh`, upgrade authority sahibi deployer anahtarı gerekir). O zamana kadar canlıda kimlik ve iptal çağrıları reddedilir (doğrulama yine çalışır: kimlik `none` görünür).
+- Devnet'teki canlı sürüm (yükseltme 2026-10-10) bu sözleşmedeki altı talimatın hepsini içerir: `notarize`, `create_agreement`, `co_sign`, `attest_identity`, `revoke_attestation`, `revoke_proof`. Zincirdeki ikilinin SHA-256'sı `docs/deployment.json`'daki kayıtla eşleşir. Sonraki yükseltmeler `scripts/deploy-devnet.sh` ile yapılır (upgrade authority sahibi deployer anahtarı gerekir); her yükseltmeden sonra `docs/deployment.json` güncellenir.
 - IDL: `program/idl/notary.json` (`python3 scripts/build-idl.py`; Anchor CLI gerekmez, CI güncel olup olmadığını denetler).
 - Kaynak ile ikilinin eşleştirilmesi: `scripts/verify-program.sh` (`solana-verify`, Docker). Henüz çalıştırılmadı; yalnızca doğrulanabilir derlemeyle yayınlanan program eşleşir.
 - Relayer: `scripts/deploy-relay.sh` ile Vercel'e durumsuz fonksiyon olarak.
